@@ -2,4 +2,4 @@
 #define __DISPATCHER_H__
 #endif
 
-int init_dispatcher(int socket);
+void *init_dispatcher(void *s);

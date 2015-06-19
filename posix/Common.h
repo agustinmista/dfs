@@ -38,20 +38,20 @@ typedef enum {
     F_NOTEXIST,        
 } Error;
 
-//typedef struct _Session {
-//	int socket;
-//	int client_id;
-//	int worker_id;
+typedef struct _Session {
+	int socket;
+	int client_id;
+	int worker_id;
 //	mqd_t worker_queue;
 //	mqd_t client_queue;
-//} Session;
-//
-//typedef struct _File {
-//	char name[64];     
-//	char *content;     
-//	int fd;            
-//	int open;      // -1 of closed, client_id otherwise
-//	int cursor;
-//	int size;
-//	struct _File *next;	
-//} File;
+} Session;
+
+typedef struct _File {
+	char name[64];     
+	char *content;     
+	int fd;            
+	int open;      // -1 of closed, client_id otherwise
+	int cursor;
+	int size;
+	struct _File *next;	
+} File;
