@@ -12,11 +12,13 @@
 #include <unistd.h>
 
 #include <pthread.h>
-//#include <mqueue.h>
+#include <mqueue.h>
 
 #define ERROR(s) (exit((perror(s), -1)))
 
 #define N_WORKERS 5
+
+#define MSG_SIZE 4096 //VER size
 
 typedef enum {
     LSD,
