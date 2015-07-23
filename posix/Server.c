@@ -12,7 +12,7 @@ int main(int argc, char **argv){
     setbuf(stdout, NULL);
     
     // Initialize and set listener socket
-    printf("DFS_SERVER: Setting up listener socket at port %d... ", port);
+    printf("DFS_SERVER: Opening listener at port %d... ", port);
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) 
         ERROR("\nDFS_SERVER: Error creating socket");
 	

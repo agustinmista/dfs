@@ -2,4 +2,4 @@
 #define __CLIENTHANDLER_H__
 #endif
 
-void handle_client();
+void *handle_client(void *session);

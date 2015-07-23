@@ -1,6 +1,7 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 #endif
+#define _GNU_SOURCE  //elimina el warning al usar asprintf
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,18 +42,17 @@ typedef enum {
 } Error;
 
 typedef struct _Session {
-	int socket;
 	int client_id;
 	int worker_id;
-//	mqd_t worker_queue;
-//	mqd_t client_queue;
+	mqd_t worker_queue;
+	mqd_t client_queue;
 } Session;
 
 typedef struct _File {
 	char name[64];     
 	char *content;     
 	int fd;            
-	int open;      // -1 of closed, client_id otherwise
+	int open;      // -1 if closed, client_id otherwise
 	int cursor;
 	int size;
 	struct _File *next;	
