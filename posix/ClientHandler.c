@@ -7,5 +7,11 @@ void *handle_client(void *s){
     
     printf("Hola! soy el ClientHandler del cliente id: %d\n", session->client_id);
 
+    while(1){
+        //---
+        //--- Where the magic happens!
+        //---
+    }   
+    
     return NULL;
 }

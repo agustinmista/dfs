@@ -32,7 +32,7 @@ int main(int argc, char **argv){
     
     // Initialize workers
     printf("DFS_SERVER: Initializing workers... ");
-    if (init_workers(N_WORKERS) < 0)
+    if (init_workers() < 0)
         ERROR("\nDFS_SERVER: Error initializing workers");
     printf("DONE\n");
     

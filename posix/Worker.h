@@ -2,10 +2,7 @@
 #define __WORKER_H__
 #endif
 
-typedef struct{
-	int id;
-	File *files;
-	//mqd_t msg;
-}Worker;
+pthread_t workers[N_WORKERS];
+mqd_t worker_queues[N_WORKERS];
 
-int init_workers(int nw);
+int init_workers();
