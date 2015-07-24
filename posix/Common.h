@@ -48,11 +48,11 @@ typedef struct _Session {
 } Session;
 
 typedef struct _File {
-	char name[64];     
-	char *content;     
+	char name[32];
 	int fd;            
 	int open;      // -1 if closed, client_id otherwise
 	int cursor;
 	int size;
+    char *content;
 	struct _File *next;	
 } File;

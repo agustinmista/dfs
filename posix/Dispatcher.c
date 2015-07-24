@@ -30,7 +30,6 @@ void *init_dispatcher(void *s){
         if((client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0666, NULL)) != (mqd_t) -1)
             ERROR("DFS_SERVER: Error opening message queue for the new client\n");
         
-
         Session *newSession = (Session *) malloc(sizeof(Session));
         newSession->client_id = conn_id;   // aprovecho el id del socket
         newSession->worker_id = getWorkerId();
