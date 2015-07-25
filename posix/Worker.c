@@ -34,8 +34,8 @@ int init_workers(){
         char *worker_name;
         asprintf(&worker_name, "/w%d", i);
         
-        if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0666, NULL)) != (mqd_t) -1)
-            ERROR("DFS_SERVER: Error opening message queue for workers\n");
+        if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0666, NULL)) == (mqd_t) -1)
+            ERROR("\nDFS_SERVER: Error opening message queue for workers\n");
         
         // Spawn a new worker
         pthread_create(&workers[i], NULL, worker, &i);
@@ -43,26 +43,3 @@ int init_workers(){
     }
     return 0;
 }
-
-
-File *newFile(File *files, char *name){
-    File *newFile = (File *) malloc(sizeof(File));
-    
-    strcpy(new_file->name, name);
-    
-    pthread_mutex_lock(&mutex_fd);
-        newFile->fd = global_fd++;
-    pthread_mutex_unlock(&mutex_fd);
-    
-    newFile->open = -1;
-    newFile->cursor = 0;
-    newFile->size = 0;
-    newFile->content = NULL;
-    
-    if (files)  newFile->next = files;
-    else        newFile->next = NULL;
-    
-    return newFile;    
-}
-
-
