@@ -18,7 +18,7 @@ void *worker(void *w_info){
     //files->content = NULL;
     //files->next = NULL;
     char message[100];
-   char *parsing, *saveptr;
+    char *parsing, *saveptr;
 	
 			
     while(1){
@@ -66,7 +66,7 @@ void *worker(void *w_info){
 }
 
 int init_workers(){
-	
+    
     for(int i = 0; i<N_WORKERS; i++){
         
         // Instance the worker message queue
@@ -77,15 +77,13 @@ int init_workers(){
             ERROR("\nDFS_SERVER: Error opening message queue for workers\n");
         
         //worker_files[i] = malloc(sizeof(File)*n_Files_Worker);
-        
-        Worker_Info *newWorker;
+        Worker_Info *newWorker = malloc(sizeof (Worker_Info));
         newWorker->id = i;
         newWorker->queue = worker_queues[i];
-        newWorker -> files = NULL;
+        newWorker->files = NULL;
         
         // Spawn a new worker
-        pthread_create(&workers[i], NULL, worker, &newWorker);
-        
+        pthread_create(&workers[i], NULL, worker, newWorker);
     }
     return 0;
 }
