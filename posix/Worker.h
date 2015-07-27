@@ -6,7 +6,5 @@
 
 pthread_t workers[N_WORKERS];
 mqd_t worker_queues[N_WORKERS];
-//File worker_files[N_WORKERS];
-
 
 int init_workers();
