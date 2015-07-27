@@ -37,6 +37,10 @@ void *init_dispatcher(void *s){
         newSession->worker_queue = worker_queues[newSession->worker_id];
             
         // Spawn a ClientHandler for the new client
+        // Posible manejo de error:
+        // if (pthread_create(&new_client, NULL, handle_client, newSession) != 0)
+                //ERROR("DFS_SERVER: Error creating pthread \n"); 
+            
         pthread_create(&new_client, NULL, handle_client, newSession);
 
         printf("DFS_SERVER: New client!\tid: %d\tworker: %d\n", newSession->client_id, newSession->worker_id);
