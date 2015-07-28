@@ -71,7 +71,7 @@ typedef struct _Request{
 	char *arg1;
 	char *arg2;
 	int client_id;
-	mqd_t client_queue;
+	mqd_t *client_queue;
 } Request;
 
 typedef struct _Reply{

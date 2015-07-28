@@ -1,15 +1,20 @@
 #include "Common.h"
 #include "ClientHandler.h"
 
-#define SEND2CLIENT(fmt, ...)   write(client_id, buffer_out, sprintf(buffer_out, fmt, ## __VA_ARGS__))
-#define SEND2WORKER(fmt, ...)   mq_send(worker_queue, buffer_out, sprintf(buffer_out, fmt, ## __VA_ARGS__), 1)
-
-
-//formato de mensaje a worker: CMD args(dependiendo de CMD) client_queue
-//mq_receive con direccion client_name que corresponda no?
+#define SEND2CLIENT(fmt,...)    write(client_id, buffer_out, sprintf(buffer_out, fmt, ##__VA_ARGS__))
+#define SEND_REQ(request)       mq_send(worker_queue, (char *) request, sizeof(request), 1)
+#define RECV_ANS()              ;
 
 //printf(%.*s\n", size, buffer);  imprime los primeros size caracteres de buffer
-        
+
+void print_request(Request *r){
+    printf("| REQUEST:\n");
+    printf("|   op: %d\n", r->op);
+    printf("|   arg0: %s\n", r->arg0);
+    printf("|   arg1: %s\n", r->arg1);
+    printf("|   arg2: %s\n", r->arg2);
+}
+
 void *handle_client(void *s){
     int identified = 0;
     int readed;
@@ -17,15 +22,14 @@ void *handle_client(void *s){
     char buffer_in[MSG_SIZE];
     char buffer_out[MSG_SIZE];
 
-    // Parse session args
-    int client_id      = ((Session *) s)->client_id;
-	int worker_id      = ((Session *) s)->worker_id;
-	mqd_t worker_queue = ((Session *) s)->worker_queue;
-	mqd_t client_queue = ((Session *) s)->client_queue;
-    free(s);
+    Request *req;
     
-    // INTENTO ENVIAR DATOS AL WORKER
-    SEND2WORKER("CRE hola.txt");
+    // Parse session args
+    Session *session = (Session *) s;
+    int client_id      = session->client_id;
+	int worker_id      = session->worker_id;
+	mqd_t worker_queue = session->worker_queue;
+	mqd_t client_queue = session->client_queue;
     
     // Client handle loop
     while(1){
@@ -49,7 +53,15 @@ void *handle_client(void *s){
                 SEND2CLIENT("> OK\n");
             } else if (!strncmp(buffer_in, "LSD", 3)) {     
                 // LSD
+                req = parseRequest(session, LSD, buffer_in);
+                print_request(req);
+                
+                // Send the request, wait for the answer and print results
+                // SEND_REQ(req);
+                // sleep a bit
+                // RECV_ANS();
                 SEND2CLIENT("> COMMAND NOT IMPLEMENTED (YET)\n");
+                
             } else if (!strncmp(buffer_in, "DEL", 3)) {     
                 // DEL
                 SEND2CLIENT("> COMMAND NOT IMPLEMENTED (YET)\n");
@@ -71,6 +83,9 @@ void *handle_client(void *s){
             } else
                 SEND2CLIENT("> ERROR: INVALID COMMAND\n");
                 
+
+
+            
         } else if(!strncmp(buffer_in, "CON", 3)) {
             identified = 1;
             SEND2CLIENT("> OK ID %d\n", client_id); 
@@ -81,9 +96,47 @@ void *handle_client(void *s){
     // Close everything
     if(mq_close(client_queue) == -1) ERROR("DFS_SERVER: Error closing client message queue.\n");
     if(mq_close(client_queue) == -1) ERROR("DFS_SERVER: Error closing worker message queue.\n");
+    free(s);
     //...
     
     return NULL;
 }
 
-
+Request *parseRequest(Session *s, Operation op, char *string){
+    char *saveptr;
+    char *arg0;
+    char *arg1;
+    char *arg2;
+    
+    // Allocate a session with default values
+    Request *req = (Request *) malloc(sizeof(Request));
+    req->op = op;
+    req->arg0 = NULL;
+    req->arg1 = NULL;
+    req->arg1 = NULL;
+    req->client_id = s->client_id;
+    req->client_queue = &(s->client_queue);
+    
+    // Set the request parameters
+    switch(op){
+        case LSD:
+            // LSD takes no parameters, nothing to do!
+            break;
+        case DEL:
+            
+            break;
+        case CRE:
+            break;
+        case OPN:
+            break;
+        case WRT:
+            break;
+        case REA:
+            break;
+        case CLO:
+            break;
+        case BYE:
+            break;
+    }
+    return req;
+}

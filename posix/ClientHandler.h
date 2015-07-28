@@ -3,3 +3,5 @@
 #endif
 
 void *handle_client(void *session);
+
+Request *parseRequest(Session *s, Operation op, char *string);
