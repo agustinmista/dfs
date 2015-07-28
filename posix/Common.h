@@ -62,3 +62,20 @@ typedef struct _Worker_Info{
 	mqd_t queue;
 	File *files;
 } Worker_Info;
+
+typedef struct _Request{
+	Operation op;
+	Error err;
+	char *arg0;
+	char *arg1;
+	char *arg2;
+	int fd;
+	int size;
+	int client_id;
+	mqd_t client_queue;
+}Request;
+
+typedef struct _Reply{
+	char *rta;
+	int client_id;
+}Reply;
