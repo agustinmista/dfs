@@ -18,7 +18,7 @@
 #define ERROR(s)    exit((perror(s), -1))
 
 #define N_WORKERS 5
-#define MSG_SIZE 255 //VER size
+#define MSG_SIZE 1024 //VER size
 
 typedef enum {
     LSD,
@@ -31,7 +31,8 @@ typedef enum {
     BYE         
 } Operation;
 
-typedef enum {
+typedef enum _Error{
+    NONE,
     BAD_FD,
     BAD_ARG,
     BAD_CMD,
@@ -69,13 +70,11 @@ typedef struct _Request{
 	char *arg0;
 	char *arg1;
 	char *arg2;
-	int fd;
-	int size;
 	int client_id;
 	mqd_t client_queue;
-}Request;
+} Request;
 
 typedef struct _Reply{
-	char *rta;
-	int client_id;
-}Reply;
+	char *answer;
+	Error err;
+} Reply;
