@@ -38,21 +38,20 @@ attr.mq_flags = 0;*/
  */
 
 void *worker(void *w_info){
-	
-	Worker_Info *info = (Worker_Info *)w_info;
-    int wid = info->id;
-    mqd_t wqueue = info->queue;
-    
-    File *files_init, *files;
+	File *files_init, *files;
     
     int n_files = 0;
-    
     int i;
     
     char message[100];
     char *parsing, *saveptr, *cmd, *arg0, *arg1, *dst, *ans;
 	
-			
+    // Parse worker args
+    int wid      = ((Worker_Info *)w_info)->id;
+    mqd_t wqueue = ((Worker_Info *)w_info)->queue;
+    free(w_info);	
+    
+    
     while(1){
         
         memset(message, 0, 100);
@@ -168,9 +167,6 @@ void *worker(void *w_info){
 				printf ("BYE\n");
 			else
 				printf("error de comando");
-        //---
-        //--- Where the magic happens!
-        //---
 		}
 		}
     }

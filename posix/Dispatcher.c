@@ -20,7 +20,7 @@ void *init_dispatcher(void *s){
         
         // Wait for a new connections
         if((conn_id = accept(socket, NULL, NULL))<0)
-            ERROR("DFS_SERVER: Error dispatching new connection\n");
+            ERROR("DFS_SERVER: Error dispatching new connection.\n");
         
         // Create a session for the new client and asign a worker
         char *client_name;
@@ -28,7 +28,7 @@ void *init_dispatcher(void *s){
     
         mqd_t client_queue;
         if((client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0666, NULL)) == (mqd_t) -1)
-            ERROR("DFS_SERVER: Error opening message queue for the new client\n");
+            ERROR("DFS_SERVER: Error opening message queue for the new client.\n");
         
         Session *newSession = (Session *) malloc(sizeof(Session));
         newSession->client_id    = conn_id;   // aprovecho el id del socket
@@ -38,9 +38,10 @@ void *init_dispatcher(void *s){
             
         // Spawn a ClientHandler for the new client
         if (pthread_create(&new_client, NULL, handle_client, newSession) != 0)
-                ERROR("DFS_SERVER: Error creating pthread \n"); 
+                ERROR("DFS_SERVER: Error creating pthread.\n"); 
 
-        printf("DFS_SERVER: New client!\tid: %d\tworker: %d\n", newSession->client_id, newSession->worker_id);
+        printf("DFS_SERVER: New client!\t(id: %d)\t(worker: %d)\n",
+               newSession->client_id, newSession->worker_id);
         
     }
 
