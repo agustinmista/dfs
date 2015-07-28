@@ -31,17 +31,14 @@ void *init_dispatcher(void *s){
             ERROR("DFS_SERVER: Error opening message queue for the new client\n");
         
         Session *newSession = (Session *) malloc(sizeof(Session));
-        newSession->client_id = conn_id;   // aprovecho el id del socket
-        newSession->worker_id = getWorkerId();
+        newSession->client_id    = conn_id;   // aprovecho el id del socket
+        newSession->worker_id    = getWorkerId();
         newSession->client_queue = client_queue;
         newSession->worker_queue = worker_queues[newSession->worker_id];
             
         // Spawn a ClientHandler for the new client
-        // Posible manejo de error:
-        // if (pthread_create(&new_client, NULL, handle_client, newSession) != 0)
-                //ERROR("DFS_SERVER: Error creating pthread \n"); 
-            
-        pthread_create(&new_client, NULL, handle_client, newSession);
+        if (pthread_create(&new_client, NULL, handle_client, newSession) != 0)
+                ERROR("DFS_SERVER: Error creating pthread \n"); 
 
         printf("DFS_SERVER: New client!\tid: %d\tworker: %d\n", newSession->client_id, newSession->worker_id);
         
