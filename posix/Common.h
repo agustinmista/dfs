@@ -20,7 +20,7 @@
 #define N_WORKERS 5
 #define MSG_SIZE 1024 //VER size
 
-typedef enum {
+typedef enum _Operation {
     LSD,
     DEL,
     CRE,
@@ -31,14 +31,13 @@ typedef enum {
     BYE         
 } Operation;
 
-typedef enum _Error{
+typedef enum _Error {
     NONE,
     BAD_FD,
-    BAD_ARG,
     BAD_CMD,
     F_OPEN,
     F_EXIST,
-    F_NOTEXIST,        
+    F_NOTEXIST      
 } Error;
 
 typedef struct _Session {
@@ -58,13 +57,13 @@ typedef struct _File {
 	struct _File *next;	
 } File;
 
-typedef struct _Worker_Info{
+typedef struct _Worker_Info {
 	int id;
 	mqd_t queue;
 	File *files;
 } Worker_Info;
 
-typedef struct _Request{
+typedef struct _Request {
 	Operation op;
 	Error err;
 	char *arg0;
@@ -74,7 +73,7 @@ typedef struct _Request{
 	mqd_t *client_queue;
 } Request;
 
-typedef struct _Reply{
+typedef struct _Reply {
+    Error err;
 	char *answer;
-	Error err;
 } Reply;

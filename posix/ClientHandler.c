@@ -90,13 +90,39 @@ void *handle_client(void *s){
             
             
             // If we generate a request, send it, wait for response and print results
-
-            
             if(req){
                 print_request(req);
                 // SEND_REQ(req);
                 // sleep a little bit
-                // RECV_ANS();
+                // Reply ans = RECV_ANS();
+                
+//                switch(ans->err){
+//                    // If no errors, print ok + extra data depending command
+//                    case NONE:
+//                        if (req->op == OPN || req->op == REA || req->op == LSD) 
+//                            SEND2CLIENT("> OK: %s\n", ans->answer);
+//                        else 
+//                            SEND2CLIENT("> OK\n");
+//                        break;
+//                    
+//                    // Otherwise, print error
+//                    case BAD_FD:
+//                        SEND2CLIENT("> ERROR: BAD FD\n");
+//                        break;
+//                    case BAD_ARG:
+//                        SEND2CLIENT("> ERROR: BAD ARG\n");
+//                        break;
+//                    case F_OPEN:
+//                        SEND2CLIENT("> ERROR: FILE ALREADY OPEN\n");
+//                        break;
+//                    case F_EXIST:
+//                        SEND2CLIENT("> ERROR: FILE ALREADY EXIST\n");
+//                        break;                    
+//                    case F_NOTEXIST:
+//                        SEND2CLIENT("> ERROR: FILE NOT EXIST\n");
+//                        break;
+//                }
+                
                 // SEND2CLIENT(answer)
                 
                 //free(ans);
