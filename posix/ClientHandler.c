@@ -92,12 +92,12 @@ void *handle_client(void *s){
             // If we generate a request, send it, wait for response and print results
             if(req){
                 print_request(req);
-                // SEND_REQ(req);
-                // sleep a little bit
-                // Reply ans = RECV_ANS();
-                
+//                 SEND_REQ(req);
+//                 //sleep a little bit
+//                 Reply *ans; // = RECV_ANS();
+//                
 //                switch(ans->err){
-//                    // If no errors, print ok + extra data depending command
+//                    // If no errors, print ok + extra data depending on command
 //                    case NONE:
 //                        if (req->op == OPN || req->op == REA || req->op == LSD) 
 //                            SEND2CLIENT("> OK: %s\n", ans->answer);
@@ -122,10 +122,8 @@ void *handle_client(void *s){
 //                        SEND2CLIENT("> ERROR: FILE NOT EXIST\n");
 //                        break;
 //                }
-                
-                // SEND2CLIENT(answer)
-                
-                //free(ans);
+//                
+//                free(ans);
                 free(req);
             }
             
