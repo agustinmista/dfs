@@ -146,9 +146,11 @@ void *handle_client(void *s){
     return NULL;
 }
 
+
 Request *parseRequest(Session *s, Operation op, char *string){
     char *saveptr;
     char *token_size;
+    char *token_fd;
     
     // Allocate a session with default values
     Request *req = (Request *) malloc(sizeof(Request));
@@ -165,7 +167,7 @@ Request *parseRequest(Session *s, Operation op, char *string){
     // Set the request parameters a.k.a. return NULL;  :P
     switch(op){
         case LSD:
-            // LSD takes no parameters, nothing to do!
+            // LSD takes no args, nothing to do!
             break;
         
         case DEL:
@@ -182,8 +184,8 @@ Request *parseRequest(Session *s, Operation op, char *string){
                
         case WRT:
             // Check if "FD" token is present
-            if(!(token_size = strtok_r(NULL, " ", &saveptr))) return NULL;
-            if(strncmp(token_size, "FD", 2)) return NULL;
+            if(!(token_fd = strtok_r(NULL, " ", &saveptr))) return NULL;
+            if(strncmp(token_fd, "FD", 2)) return NULL;
                
             if(!(req->arg0 = strtok_r(NULL, " ", &saveptr))) return NULL;
         
@@ -192,11 +194,11 @@ Request *parseRequest(Session *s, Operation op, char *string){
             if(strncmp(token_size, "SIZE", 4)) return NULL;
         
             if(!(req->arg1 = strtok_r(NULL, " ", &saveptr))) return NULL;
-        
-//... Something to ignore starting whitespaces
-        
             if(!(req->arg2 = strtok_r(NULL, "\n", &saveptr))) return NULL;
-            
+        
+            // Ignore starting whitespaces
+            while(!strncmp(req->arg2, " ", 1)) req->arg2++;
+                
             // Check if size is correct
             if(atoi(req->arg1) > strlen(req->arg2)) return NULL;
             
@@ -204,8 +206,8 @@ Request *parseRequest(Session *s, Operation op, char *string){
         
         case REA:
             // Check if "FD" token is present
-            if(!(token_size = strtok_r(NULL, " ", &saveptr))) return NULL;
-            if(strncmp(token_size, "FD", 2)) return NULL;
+            if(!(token_fd = strtok_r(NULL, " ", &saveptr))) return NULL;
+            if(strncmp(token_fd, "FD", 2)) return NULL;
                
             if(!(req->arg0 = strtok_r(NULL, " ", &saveptr))) return NULL;
         
@@ -219,15 +221,15 @@ Request *parseRequest(Session *s, Operation op, char *string){
         
         case CLO:
             // Check if "FD" token is present
-            if(!(token_size = strtok_r(NULL, " ", &saveptr))) return NULL;
-            if(strncmp(token_size, "FD", 2)) return NULL;
+            if(!(token_fd = strtok_r(NULL, " ", &saveptr))) return NULL;
+            if(strncmp(token_fd, "FD", 2)) return NULL;
         
             if(!(req->arg0 = strtok_r(NULL, " ", &saveptr))) return NULL;
         
             break;
         
         case BYE:
-            // BYE takes no parameters, nothing to do!
+            // BYE takes no args, nothing to do!
             break;
     }
     return req;
