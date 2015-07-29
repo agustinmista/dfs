@@ -8,11 +8,8 @@
 //printf(%.*s\n", size, buffer);  imprime los primeros size caracteres de buffer
 
 void print_request(Request *r){
-    printf("| REQUEST:\n");
-    printf("|   op: %d\n", r->op);
-    printf("|   arg0: %s\n", r->arg0);
-    printf("|   arg1: %s\n", r->arg1);
-    printf("|   arg2: %s\n", r->arg2);
+    printf("REQUEST: [id: %d] [op: %d] [arg0:'%s'] [arg1:'%s\'] [arg2:'%s']\n",
+           r->client_id, r->op, r->arg0, r->arg1, r->arg2);
 }
 
 void *handle_client(void *s){
@@ -44,47 +41,68 @@ void *handle_client(void *s){
 		
         // Parse commands
         if(identified){
-            if (strlen(buffer_in) < 3)
+            if (strlen(buffer_in) < 3){
+                req = NULL;
                 SEND2CLIENT("> ERROR: BAD COMMAND\n");
-            else if (!strncmp(buffer_in, "CON", 3))
-                SEND2CLIENT("> ERROR: ALREADY IDENTIFIED\n");
-            else if (!strncmp(buffer_in, "BYE", 3)){
-                identified = 0;
-                SEND2CLIENT("> OK\n");
+                                
             } else if (!strncmp(buffer_in, "LSD", 3)) {     
-                // LSD
-                req = parseRequest(session, LSD, buffer_in);
-                print_request(req);
+                if (!(req = parseRequest(session, LSD, buffer_in)))
+                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
                 
-                // Send the request, wait for the answer and print results
-                // SEND_REQ(req);
-                // sleep a bit
-                // RECV_ANS();
-                SEND2CLIENT("> COMMAND NOT IMPLEMENTED (YET)\n");
+            } else if (!strncmp(buffer_in, "DEL", 3)) {
+                if (!(req = parseRequest(session, DEL, buffer_in)))
+                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
                 
-            } else if (!strncmp(buffer_in, "DEL", 3)) {     
-                // DEL
-                SEND2CLIENT("> COMMAND NOT IMPLEMENTED (YET)\n");
             } else if (!strncmp(buffer_in, "CRE", 3)) {     
-                // CRE
-                SEND2CLIENT("> COMMAND NOT IMPLEMENTED (YET)\n");    
-            } else if (!strncmp(buffer_in, "OPN", 3)) {     
-                // OPN
-                SEND2CLIENT("> COMMAND NOT IMPLEMENTED (YET)\n");
-            } else if (!strncmp(buffer_in, "WRT FD", 6)) {  
-                // WRT
-                SEND2CLIENT("> COMMAND NOT IMPLEMENTED (YET)\n");
-            } else if (!strncmp(buffer_in, "REA FD", 6)) {  
-                // REA
-                SEND2CLIENT("> COMMAND NOT IMPLEMENTED (YET)\n");        
-            } else if (!strncmp(buffer_in, "CLO FD", 6)) {  
-                // CLO
-                SEND2CLIENT("> COMMAND NOT IMPLEMENTED (YET)\n");
-            } else
-                SEND2CLIENT("> ERROR: INVALID COMMAND\n");
+                if (!(req = parseRequest(session, CRE, buffer_in)))
+                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
                 
+            } else if (!strncmp(buffer_in, "OPN", 3)) {     
+                if (!(req = parseRequest(session, OPN, buffer_in)))
+                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                
+            } else if (!strncmp(buffer_in, "WRT", 3)) {  
+                if (!(req = parseRequest(session, WRT, buffer_in)))
+                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                
+            } else if (!strncmp(buffer_in, "REA", 3)) {  
+                if (!(req = parseRequest(session, REA, buffer_in)))
+                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                
+            } else if (!strncmp(buffer_in, "CLO", 3)) {  
+                if (!(req = parseRequest(session, CLO, buffer_in)))
+                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                
+            } else if (!strncmp(buffer_in, "BYE", 3)){
+                if (!(req = parseRequest(session, BYE, buffer_in))) 
+                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                identified = 0;
+                SEND2CLIENT("> OK\n");  
+                
+            } else if (!strncmp(buffer_in, "CON", 3)){
+                req = NULL;
+                SEND2CLIENT("> ERROR: ALREADY IDENTIFIED\n");    
+                
+            } else {
+                req = NULL;
+                SEND2CLIENT("> ERROR: BAD COMMAND\n");
+            }
+            
+            
+            // If we generate a request, send it, wait for response and print results
 
-
+            
+            if(req){
+                print_request(req);
+                // SEND_REQ(req);
+                // sleep a little bit
+                // RECV_ANS();
+                // SEND2CLIENT(answer)
+                
+                //free(ans);
+                free(req);
+            }
+            
             
         } else if(!strncmp(buffer_in, "CON", 3)) {
             identified = 1;
@@ -104,9 +122,7 @@ void *handle_client(void *s){
 
 Request *parseRequest(Session *s, Operation op, char *string){
     char *saveptr;
-    char *arg0;
-    char *arg1;
-    char *arg2;
+    char *token_size;
     
     // Allocate a session with default values
     Request *req = (Request *) malloc(sizeof(Request));
@@ -117,25 +133,75 @@ Request *parseRequest(Session *s, Operation op, char *string){
     req->client_id = s->client_id;
     req->client_queue = &(s->client_queue);
     
-    // Set the request parameters
+    // Ignore "CMD"
+    if(!(strtok_r(string, " ", &saveptr))) return NULL;
+    
+    // Set the request parameters a.k.a. return NULL;  :P
     switch(op){
         case LSD:
             // LSD takes no parameters, nothing to do!
             break;
+        
         case DEL:
+            if(!(req->arg0 = strtok_r(NULL, " ", &saveptr))) return NULL;
+            break;
+        
+        case CRE:
+            if(!(req->arg0 = strtok_r(NULL, " ", &saveptr))) return NULL;
+            break;
+        
+        case OPN:
+            if(!(req->arg0 = strtok_r(NULL, " ", &saveptr))) return NULL;
+            break;
+               
+        case WRT:
+            // Check if "FD" token is present
+            if(!(token_size = strtok_r(NULL, " ", &saveptr))) return NULL;
+            if(strncmp(token_size, "FD", 2)) return NULL;
+               
+            if(!(req->arg0 = strtok_r(NULL, " ", &saveptr))) return NULL;
+        
+            // Check if "SIZE" token is present
+            if(!(token_size = strtok_r(NULL, " ", &saveptr))) return NULL;
+            if(strncmp(token_size, "SIZE", 4)) return NULL;
+        
+            if(!(req->arg1 = strtok_r(NULL, " ", &saveptr))) return NULL;
+        
+//... Something to ignore starting whitespaces
+        
+            if(!(req->arg2 = strtok_r(NULL, "\n", &saveptr))) return NULL;
+            
+            // Check if size is correct
+            if(atoi(req->arg1) > strlen(req->arg2)) return NULL;
             
             break;
-        case CRE:
-            break;
-        case OPN:
-            break;
-        case WRT:
-            break;
+        
         case REA:
+            // Check if "FD" token is present
+            if(!(token_size = strtok_r(NULL, " ", &saveptr))) return NULL;
+            if(strncmp(token_size, "FD", 2)) return NULL;
+               
+            if(!(req->arg0 = strtok_r(NULL, " ", &saveptr))) return NULL;
+        
+            // Check if "SIZE" token is present
+            if(!(token_size = strtok_r(NULL, " ", &saveptr))) return NULL;
+            if(strncmp(token_size, "SIZE", 4)) return NULL;
+        
+            if(!(req->arg1 = strtok_r(NULL, " ", &saveptr))) return NULL;
+            
             break;
+        
         case CLO:
+            // Check if "FD" token is present
+            if(!(token_size = strtok_r(NULL, " ", &saveptr))) return NULL;
+            if(strncmp(token_size, "FD", 2)) return NULL;
+        
+            if(!(req->arg0 = strtok_r(NULL, " ", &saveptr))) return NULL;
+        
             break;
+        
         case BYE:
+            // BYE takes no parameters, nothing to do!
             break;
     }
     return req;
