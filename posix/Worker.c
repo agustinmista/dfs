@@ -70,7 +70,6 @@ void *worker(void *w_info){
 							
 							if(N_WORKERS > 1){
 								intern_request->op = LSD;
-								intern_request->err = NONE;
 								intern_request->arg0 = "0";
 								intern_request->arg1 = NULL;
 								intern_request->arg2 = NULL;
