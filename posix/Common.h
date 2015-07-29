@@ -66,7 +66,6 @@ typedef struct _Worker_Info {
 
 typedef struct _Request {
 	Operation op;
-	Error err;
 	char *arg0;
 	char *arg1;
 	char *arg2;
@@ -75,6 +74,6 @@ typedef struct _Request {
 } Request;
 
 typedef struct _Reply {
-    Error err;
+	Error err;
 	char *answer;
 } Reply;
