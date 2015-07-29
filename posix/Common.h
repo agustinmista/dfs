@@ -28,7 +28,8 @@ typedef enum _Operation {
     WRT,
     REA,
     CLO,
-    BYE         
+    BYE
+    //_CHECK_EXISTENCE         
 } Operation;
 
 typedef enum _Error {
@@ -48,7 +49,7 @@ typedef struct _Session {
 } Session;
 
 typedef struct _File {
-	char name[32];
+	char *name; //32
 	int fd;            
 	int open;      // -1 if closed, client_id otherwise
 	int cursor;
@@ -59,7 +60,7 @@ typedef struct _File {
 
 typedef struct _Worker_Info {
 	int id;
-	mqd_t queue;
+	mqd_t *queue;
 	File *files;
 } Worker_Info;
 

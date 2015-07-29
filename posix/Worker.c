@@ -6,8 +6,30 @@ attr.mq_maxmsg = 300;
 attr.mq_msgsize = 10000;
 attr.mq_flags = 0;*/
 
+//seguir viendo como manejar bien queues y ver como unificar respuestas
+
+int file_descriptor = INIT_FD;
+pthread_mutex_t fd_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+int existe_archivo(int wID, File *files, char *nombre){
+
+    int i = 0;
+
+    while (files != NULL)
+    {
+        if (strcmp(files->name, nombre) == 0)
+            return i;
+        else
+            i++;
+        files = files->next;
+    }
+    return -1;
+}
+
 void *worker(void *w_info){
-	File *files_init, *files;
+	
+	File *files = NULL;
+	File *files_init = NULL;
     
     int n_files = 0;
     int i;
@@ -19,7 +41,7 @@ void *worker(void *w_info){
 	
     // Parse worker args
     int wid      = ((Worker_Info *)w_info)->id;
-    mqd_t wqueue = ((Worker_Info *)w_info)->queue;
+    mqd_t *wqueue = ((Worker_Info *)w_info)->queue;
     free(w_info);	
     
     
@@ -30,13 +52,13 @@ void *worker(void *w_info){
         ans->answer = "";
         files = files_init;
               
-        if(mq_receive(wqueue, message, sizeof(message), NULL) >= 0){
+        if(mq_receive(wqueue[wid], message, sizeof(message), NULL) >= 0){
 		
 			request = (Request *) message;
 			
 			switch(request->op){
 				
-				case 0:{ //LSD
+				case LSD:{
 					
 					if(wid == 0){
 							
@@ -55,14 +77,14 @@ void *worker(void *w_info){
 								intern_request->client_id = request->client_id;
 								intern_request->client_queue = request->client_queue;
 								
-								//for(i=1; i < N_WORKERS; i++)				
-									//mq_send(WorkerN, (char *) &intern_request, sizeof(intern_request), MQ_PRIO_MAX);
+								for(i=1; i < N_WORKERS; i++)				
+									mq_send(wqueue[i], (char *) &intern_request, sizeof(intern_request), 32768);
 							}
 							
-							//mq_send(request->client_queue, (char *) &ans, sizeof(ans), MQ_PRIO_MAX - 1); 
+							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 32768); 
 								
 					}
-					else if(strcmp(request->arg0, "0") == 0){		//mensaje interno -- externos con -1?
+					else if(strcmp(request->arg0, "0") == 0){		//mensaje interno
 						
 						for(i=0; i < n_files; i++){
 								strcat(ans->answer, files->name);
@@ -70,39 +92,92 @@ void *worker(void *w_info){
 								files = files->next;
 						}
 						
-						//mq_send(request->client_queue, (char *) &ans, sizeof(ans), MQ_PRIO_MAX - 1);
+						mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 32768);
 					}
 					else {
 						
-						//mq_send(Worker0, (char *) &request, sizeof(request), MQ_PRIO_MAX);
+						mq_send(wqueue[0], (char *) &request, sizeof(request), 32768);
 						
 					}
 				}
-				case 1:{ //DEL
+				case DEL:{ 
 
-				//Crear una función que analice si el archivo
-				//se encuentra en este worker
-				//Si no está enviar mensaje indicando el comando y el nro
-				//de worker
+					//Crear una función que analice si el archivo
+					//se encuentra en este worker
+					//Si no está enviar mensaje indicando el comando y el nro
+					//de worker
 				
-				//Borrar el archivo si está en alguno
+					//Borrar el archivo si está en alguno
 				}
-				case 2:{ //CRE
+				case CRE:{
+					
+					i = 0;
+                    int res = -1;
+                    int tmp_fd;
+                    
+                    pthread_mutex_lock(&fd_mutex);
+						tmp_fd = file_descriptor;
+						file_descriptor++;
+					pthread_mutex_unlock(&fd_mutex);
+                   
+					
+					// Esto no se si esta bien hacerlo asi o convendria hacerlo en paralelo: <- mensajes creo, ver como unificar respuesta
+                    /* while ((i < N_WORKERS){  <- cada uno debería tener acceso directo sólo a su lista de archivos
+                        res = existe_archivo_2(i, files,name);
+                        
+                        }*/
+                        
+                    //for(i=1; i < N_WORKERS; i++){		//modificarlo para distinguir msjs internos		
+						//if(i != wid)
+							//mq_send(WorkerN, (char *) &intern_request, sizeof(intern_request), MQ_PRIO_MAX);
+                    //}
+                    
+                    
+                    //receives unificados
+                    //res = existe_archivo_local, rtas de receive
+                    
+                    if (res != -1){
+						ans->answer = NULL;
+						ans->err = F_EXIST;
+					}    
+                    else if (res == -1){                 
+							
+							File *new = malloc(sizeof(File));
+							new -> name = request->arg0;
+							new -> fd = tmp_fd;
+							new -> open = -1;
+							new -> cursor = 0;
+							new -> size = 0; //?
+							new -> content = NULL;
+							new -> next = NULL; 
+                        
+							if(files_init->content == NULL)
+								files_init = new;
+							else{
+								while(files->next != NULL)
+									files = files -> next;
+								
+								files->next = new;
+							}
+
+                        ans -> answer = NULL;                   				
+                        ans -> err = NONE;
+                	}
+					mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 32768);
+				}
+				case OPN:{
 					
 				}
-				case 3:{ //OPN
+				case WRT:{ 
 					
 				}
-				case 4:{ //WRT
+				case REA:{ 
 					
 				}
-				case 5:{ //REA
-					
-				}
-				case 6:{ //CLO
+				case CLO:{
 				
 				}
-				case 7:{ //BYE
+				case BYE:{
 					
 				}
 			}
@@ -110,10 +185,8 @@ void *worker(void *w_info){
 		}
 		
 	}
-			
-	free(intern_request);
-	free(ans);			
-    mq_close(wqueue);
+						
+    mq_close(wqueue[wid]);
     return 0;
 
 }
@@ -131,7 +204,7 @@ int init_workers(){
         
         Worker_Info *newWorker = malloc(sizeof (Worker_Info));
         newWorker->id = i;
-        newWorker->queue = worker_queues[i];
+        newWorker->queue = worker_queues;
         
         // Spawn a new worker
         pthread_create(&workers[i], NULL, worker, newWorker);

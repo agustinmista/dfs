@@ -3,6 +3,8 @@
 #endif
 
 #define n_Files_Worker 5
+#define INIT_FD 5
+
 
 pthread_t workers[N_WORKERS];
 mqd_t worker_queues[N_WORKERS];
