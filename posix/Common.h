@@ -29,8 +29,7 @@ typedef enum _Operation {
     WRT,
     REA,
     CLO,
-    BYE
-    //_CHECK_EXISTENCE         
+    BYE         
 } Operation;
 
 typedef enum _Error {

@@ -6,13 +6,14 @@ attr.mq_maxmsg = 300;
 attr.mq_msgsize = 10000;
 attr.mq_flags = 0;*/
 
-//seguir viendo como manejar bien queues y ver como unificar respuestas
+//HACER MACRO CON RESPUESTA SATISFACTORIA AL HANDLER
+
 
 int file_descriptor = INIT_FD;
 pthread_mutex_t fd_mutex = PTHREAD_MUTEX_INITIALIZER;
 int tmp_fd;
 
-int existe_archivo(int wID, File *files, char *nombre){
+int existe_archivo(int wID, File *files, char *nombre){ //>0 existe
 
     int i = 0;
 
@@ -26,6 +27,21 @@ int existe_archivo(int wID, File *files, char *nombre){
     }
     return -1;
 }
+
+int archivo_abierto(int wID, File *files, char *nombre){ //-2 no existe, -1 existe cerrado, id existe abierto por id
+
+	while(files != NULL){
+		if(strcmp(files->name, nombre) == 0){
+			if((files->open) < 0)
+				return -1;
+			else
+				return (files->open);
+		}
+	}
+	return -2;
+}
+
+
 
 void *worker(void *w_info){
 	
@@ -101,7 +117,7 @@ void *worker(void *w_info){
 						
 					}
 				}
-				case DEL:{ 
+				case DEL:{ //Me falta terminar
 
 					//Crear una función que analice si el archivo
 					//se encuentra en este worker
@@ -109,6 +125,51 @@ void *worker(void *w_info){
 					//de worker
 				
 					//Borrar el archivo si está en alguno
+					
+					//Mensaje externo
+						
+					if(archivo_abierto(wid,files,request->arg0) >= 0){		//Existe acá y está abierto
+							
+						if(request->origin){
+							ans->answer = NULL;
+							ans-> err = F_OPEN;
+							
+							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+						}
+						//else ver si cualquier worker se puede comunicar con el handler.. 
+						//si puede la respuesta va directo al handler, de otro modo al worker arg1
+							
+					}
+					else if(archivo_abierto(wid,files,request->arg0) == -1){ //Existe cerrado acá
+							
+						File *prev = NULL;
+							
+						while (files != NULL){ //Revisar y ponerla en una función aparte tal vez
+								
+							if(strcmp(files->name, request->arg0) == 0){
+								(prev->next) = (files->next);
+								free(files);
+								break;
+							}
+							else{
+								prev = files;
+								files = files->next;	
+							}
+						}
+						
+						if(request->origin){	
+							ans->answer = NULL;
+							ans->err = NONE;
+		
+							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+						
+						}
+						//else request o error directo?
+					}
+					//else{	//No existe
+						//iniciar anillo
+					
+					
 					
 				}
 				case CRE:{	//Vean si los cambios les convencen
