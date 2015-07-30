@@ -19,6 +19,7 @@
 
 #define N_WORKERS 5
 #define MSG_SIZE 1024 //VER size
+#define MAX_PRIORITY 32768
 
 typedef enum _Operation {
     LSD,
@@ -66,6 +67,7 @@ typedef struct _Worker_Info {
 
 typedef struct _Request {
 	Operation op;
+	int origin; //0 internas, >0 (1 preferentemente) externas
 	char *arg0;
 	char *arg1;
 	char *arg2;

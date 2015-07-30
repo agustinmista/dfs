@@ -10,6 +10,7 @@ attr.mq_flags = 0;*/
 
 int file_descriptor = INIT_FD;
 pthread_mutex_t fd_mutex = PTHREAD_MUTEX_INITIALIZER;
+int tmp_fd;
 
 int existe_archivo(int wID, File *files, char *nombre){
 
@@ -70,20 +71,21 @@ void *worker(void *w_info){
 							
 							if(N_WORKERS > 1){
 								intern_request->op = LSD;
-								intern_request->arg0 = "0";
+								intern_request->origin = 0;
+								intern_request->arg0 = NULL;
 								intern_request->arg1 = NULL;
 								intern_request->arg2 = NULL;
 								intern_request->client_id = request->client_id;
 								intern_request->client_queue = request->client_queue;
 								
 								for(i=1; i < N_WORKERS; i++)				
-									mq_send(wqueue[i], (char *) &intern_request, sizeof(intern_request), 32768);
+									mq_send(wqueue[i], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
 							}
 							
-							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 32768); 
+							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY); 
 								
 					}
-					else if(strcmp(request->arg0, "0") == 0){		//mensaje interno
+					else if(!(request->origin)){		//mensaje interno
 						
 						for(i=0; i < n_files; i++){
 								strcat(ans->answer, files->name);
@@ -91,11 +93,11 @@ void *worker(void *w_info){
 								files = files->next;
 						}
 						
-						mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 32768);
+						mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
 					}
 					else {
 						
-						mq_send(wqueue[0], (char *) &request, sizeof(request), 32768);
+						mq_send(wqueue[0], (char *) &request, sizeof(request), MAX_PRIORITY);
 						
 					}
 				}
@@ -107,10 +109,105 @@ void *worker(void *w_info){
 					//de worker
 				
 					//Borrar el archivo si está en alguno
-				}
-				case CRE:{
 					
-					i = 0;
+				}
+				case CRE:{	//Vean si los cambios les convencen
+					
+					if((request->origin) && (existe_archivo(wid,files,request->arg0) != -1)){ //existe en worker ppal
+		
+						ans->answer = NULL;
+						ans->err = F_EXIST;
+		
+						mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+					
+					}
+					else if((request->origin) && (existe_archivo(wid,files,request->arg0) == -1)) { //No existe en ppal
+						
+						//inicio anillo
+						intern_request -> op = CRE;
+						intern_request -> origin = 0;
+						intern_request -> arg0 = request -> arg0;
+						asprintf(&(intern_request -> arg1), "%d", wid);
+						intern_request -> arg2 = "0";
+						intern_request -> client_id = request -> client_id;
+						intern_request -> client_queue = request -> client_queue;
+ 					
+						if(wid == N_WORKERS - 1)
+							mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+						else
+							mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+							
+					}
+					else if(!(request->origin)) { //Interno
+						
+						if(atoi(request -> arg1) == wid){ //volví
+							if(strcmp(request->arg2, "-1") == 0){ //existe
+								
+								ans->answer = NULL;
+								ans->err = F_EXIST;
+								
+							}
+							else{
+								
+								pthread_mutex_lock(&fd_mutex);
+									tmp_fd = file_descriptor;
+									file_descriptor++;
+								pthread_mutex_unlock(&fd_mutex);
+					
+								File *new = malloc(sizeof(File));
+								new -> name = request->arg0;
+								new -> fd = tmp_fd;
+								new -> open = -1;
+								new -> cursor = 0;
+								new -> size = 0; //?
+								new -> content = NULL;
+								new -> next = files; 
+					
+								if(files_init->content == NULL)
+									files = new;
+								else{
+									while(files->next != NULL){
+										files = files -> next;
+									}
+									files->next = new;
+								}
+								
+								asprintf(&(ans->answer), "%d", tmp_fd); //VER
+								ans->err = NONE;
+								
+							}
+							
+							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+							
+						}
+						else{	//todavía no volví
+							
+							if(existe_archivo(wid,files,request->arg0) != -1){ //existe
+								
+								intern_request -> op = CRE;
+								intern_request -> origin = 0;
+								intern_request -> arg0 = request -> arg0;
+								intern_request -> arg1 = request -> arg1; //id worker ppal
+								intern_request -> arg2 = "-1";
+								intern_request -> client_id = request -> client_id;
+								intern_request -> client_queue = request -> client_queue;
+							
+								mq_send(wqueue[atoi(request->arg1)], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY); 
+							
+							}
+							else{
+								
+								if(wid == N_WORKERS - 1)
+									mq_send(wqueue[0], (char *) &request, sizeof(request), MAX_PRIORITY);
+								else
+									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), MAX_PRIORITY);
+							
+							}
+							
+						}	
+					
+					}
+					/*i = 0;
                     int res = -1;
                     int tmp_fd;
                     
@@ -119,50 +216,54 @@ void *worker(void *w_info){
 						file_descriptor++;
 					pthread_mutex_unlock(&fd_mutex);
                    
+					if ((request->origin) && (existe_archivo(wid,files,request->arg0) != -1)){ //SI existe - externo
+						
+						strcat(ans -> answer, "1");  		
 					
-					// Esto no se si esta bien hacerlo asi o convendria hacerlo en paralelo: <- mensajes creo, ver como unificar respuesta
-                    /* while ((i < N_WORKERS){  <- cada uno debería tener acceso directo sólo a su lista de archivos
-                        res = existe_archivo_2(i, files,name);
-                        
-                        }*/
-                        
-                    //for(i=1; i < N_WORKERS; i++){		//modificarlo para distinguir msjs internos		
-						//if(i != wid)
-							//mq_send(WorkerN, (char *) &intern_request, sizeof(intern_request), MQ_PRIO_MAX);
-                    //}
-                    
-                    
-                    //receives unificados
-                    //res = existe_archivo_local, rtas de receive
-                    
-                    if (res != -1){
-						ans->answer = NULL;
-						ans->err = F_EXIST;
-					}    
-                    else if (res == -1){                 
-							
-							File *new = malloc(sizeof(File));
-							new -> name = request->arg0;
-							new -> fd = tmp_fd;
-							new -> open = -1;
-							new -> cursor = 0;
-							new -> size = 0; //?
-							new -> content = NULL;
-							new -> next = NULL; 
-                        
-							if(files_init->content == NULL)
-								files_init = new;
-							else{
-								while(files->next != NULL)
-									files = files -> next;
-								
-								files->next = new;
-							}
+					}
+					else if ((request->origin) && (existe_archivo(wid,files,request->arg0) == -1)){ //NO existe - externo
 
-                        ans -> answer = NULL;                   				
-                        ans -> err = NONE;
-                	}
-					mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 32768);
+							intern_request -> op = CRE;
+							intern_request -> origin = 0;
+							intern_request -> arg0 = request->arg0;
+							intern_request -> arg1 = "0";
+							intern_request -> arg2 = NULL;
+							intern_request -> client_id = request->client_id;
+							intern_request -> client_queue = request->client_queue;
+        
+							while ((i < N_WORKERS) && (i != wid))
+								mq_send(wqueue[i], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+								
+					}    
+					else if (!(request->origin) && (existe_archivo(wid,files,request->arg0) != -1)) // SI existe - interno
+						strcat(ans -> answer, "1");
+					else //No existe - interno
+						strcat(ans -> answer, "0");
+					
+					 
+					if(memchr (ans -> answer,ch,strlen(ans -> answer)) == NULL){
+						File *new = malloc(sizeof(File));
+						new -> name = request->arg0;
+						new -> fd = tmp_fd;
+						new -> open = -1;
+						new -> cursor = 0;
+						new -> size = 0; //?
+						new -> content = NULL;
+						new -> next = files; 
+							  
+						if(files_init->content == NULL)
+							files_init = new;
+						else{
+							while(files->next != NULL)
+							files = files -> next;
+						
+							files->next = new;
+						}        
+					}
+					else
+						ans -> error = F_EXIST;
+            
+}*/
 				}
 				case OPN:{
 					
