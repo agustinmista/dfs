@@ -2,8 +2,8 @@
 #include "ClientHandler.h"
 
 #define SEND2CLIENT(fmt,...)    write(client_id, buffer_out, sprintf(buffer_out, fmt, ##__VA_ARGS__))
-#define SEND_REQ(request)       mq_send(worker_queue, (char *) request, sizeof(request), 1)
-#define RECV_ANS()              ;
+#define SEND_REQ(request)       mq_send(worker_queue, (char *) &request, sizeof(Request), MAX_PRIORITY)
+#define RECV_ANS()              mq_receive(client_queue, buffer_in, MSG_SIZE, NULL)
 
 //printf(%.*s\n", size, buffer);  imprime los primeros size caracteres de buffer
 
@@ -24,7 +24,7 @@ void *handle_client(void *s){
     // Parse session args
     Session *session = (Session *) s;
     int client_id      = session->client_id;
-	int worker_id      = session->worker_id;
+//	int worker_id      = session->worker_id;     // unused :/ lo removemos de session?
 	mqd_t worker_queue = session->worker_queue;
 	mqd_t client_queue = session->client_queue;
     
@@ -39,8 +39,12 @@ void *handle_client(void *s){
         readed-=2;
 		buffer_in[readed] = '\0';
 		
+        // Ignore empty lines
+        if (!strlen(buffer_in)) continue;               
+        
         // Parse commands
-        if(identified){
+        else if(identified){
+                
             if (strlen(buffer_in) < 3){
                 req = NULL;
                 SEND2CLIENT("> ERROR: BAD COMMAND\n");
@@ -92,9 +96,13 @@ void *handle_client(void *s){
             // If we generate a request, send it, wait for response and print results
             if(req){
                 print_request(req);
-//                 SEND_REQ(req);
-//                 //sleep a little bit
-//                 Reply *ans; // = RECV_ANS();
+
+                if(SEND_REQ(req) != 0) ERROR("DFS_SERVER: Error sending request to worker\n");
+                
+                if((readed = RECV_ANS())) ERROR("DFS_SERVER: Error receiving answer from worker\n");
+
+//               Reply *ans ; // = RECV_ANS();
+//                ans->err = BAD_FD;
 //                
 //                switch(ans->err){
 //                    // If no errors, print ok + extra data depending on command
@@ -114,6 +122,9 @@ void *handle_client(void *s){
 //                        break;
 //                    case F_OPEN:
 //                        SEND2CLIENT("> ERROR: FILE ALREADY OPEN\n");
+//                        break;                    
+//                    case F_CLOSED:
+//                        SEND2CLIENT("> ERROR: FILE IS CLOSED\n");
 //                        break;
 //                    case F_EXIST:
 //                        SEND2CLIENT("> ERROR: FILE ALREADY EXIST\n");

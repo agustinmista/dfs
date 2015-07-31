@@ -18,8 +18,10 @@
 #define ERROR(s)    exit((perror(s), -1))
 
 #define N_WORKERS 5
+#define MAX_MESSAGES 10
 #define MSG_SIZE 1024 //VER size
 #define MAX_PRIORITY 32768
+
 
 typedef enum _Operation {
     LSD,
@@ -35,9 +37,10 @@ typedef enum _Operation {
 typedef enum _Error {
     NONE,
     BAD_FD,
-    BAD_CMD,
+    BAD_ARG,
     F_OPEN,
     F_EXIST,
+    F_CLOSED,
     F_NOTEXIST      
 } Error;
 

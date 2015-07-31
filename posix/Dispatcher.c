@@ -25,9 +25,14 @@ void *init_dispatcher(void *s){
         // Create a session for the new client and asign a worker
         char *client_name;
         asprintf(&client_name, "/c%d", conn_id);
-    
+        
+        attr.mq_flags = 0;  
+        attr.mq_maxmsg = MAX_MESSAGES;  
+        attr.mq_msgsize = MSG_SIZE;  
+        attr.mq_curmsgs = 0;
+        
         mqd_t client_queue;
-        if((client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0666, NULL)) == (mqd_t) -1)
+        if((client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0666, &attr)) == (mqd_t) -1)
             ERROR("DFS_SERVER: Error opening message queue for the new client.\n");
         
         Session *newSession = (Session *) malloc(sizeof(Session));

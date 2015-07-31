@@ -1,13 +1,9 @@
 #include "Common.h"
 #include "Worker.h"
 
-/*struct mq_attr attr;
-attr.mq_maxmsg = 300;
-attr.mq_msgsize = 10000;
-attr.mq_flags = 0;*/
-
 //HACER MACRO CON RESPUESTA SATISFACTORIA AL HANDLER
 
+struct mq_attr attr;
 
 int file_descriptor = INIT_FD;
 pthread_mutex_t fd_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -61,6 +57,7 @@ void *worker(void *w_info){
     mqd_t *wqueue = ((Worker_Info *)w_info)->queue;
     free(w_info);	
     
+    int readed;
     
     while(1){
         
@@ -68,11 +65,12 @@ void *worker(void *w_info){
         ans->err = NONE;
         ans->answer = "";
         files = files_init;
-              
-        if(mq_receive(wqueue[wid], message, sizeof(message), NULL) >= 0){
-		
+        
+        if((readed = mq_receive(wqueue[wid], message, sizeof(message), NULL)) >= 0){
+		      
 			request = (Request *) message;
-			
+			printf("Recibí una request de %d\n", request->client_id);
+            
 			switch(request->op){
 				
 				case LSD:{
@@ -360,7 +358,12 @@ int init_workers(){
         char *worker_name;
         asprintf(&worker_name, "/w%d", i);
         
-        if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0666, NULL)) == (mqd_t) -1)
+        attr.mq_flags = 0;  
+        attr.mq_maxmsg = MAX_MESSAGES;  
+        attr.mq_msgsize = MSG_SIZE;  
+        attr.mq_curmsgs = 0;
+        
+        if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0666, &attr)) == (mqd_t) -1)
             ERROR("\nDFS_SERVER: Error opening message queue for workers\n");
         
         Worker_Info *newWorker = malloc(sizeof (Worker_Info));
