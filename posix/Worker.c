@@ -9,7 +9,7 @@ int file_descriptor = INIT_FD;
 pthread_mutex_t fd_mutex = PTHREAD_MUTEX_INITIALIZER;
 int tmp_fd;
 
-int archivo_abierto(int wID, File *files, char *nombre){ //-2 no existe, -1 existe cerrado, id existe abierto por id
+int archivo_abierto(File *files, char *nombre){ //-2 no existe, -1 existe cerrado, id existe abierto por id
 
 	while(files != NULL){
 		if(strcmp(files->name, nombre) == 0){
@@ -23,7 +23,28 @@ int archivo_abierto(int wID, File *files, char *nombre){ //-2 no existe, -1 exis
 	return -2;
 }
 
-char * listar_archivos(int wID, File *files){
+int borrar(File *files, char *nombre){
+	
+	File *prev = NULL;
+	
+	while(files != NULL){
+		if(strcmp(files->name, nombre) == 0){
+			if((files->open) < 0){
+				prev->next = files->next;
+				free(files);
+				return 0;	//OK, borrado
+			}
+			else
+				return -1;	//Abierto
+		}
+		else
+			files = files->next;
+	}
+	return -2; //No existe
+	
+}
+
+char * listar_archivos(File *files){
 	
 	if(files == NULL)
 		return " ";
@@ -89,7 +110,7 @@ void *worker(void *w_info){
 						}
 						else{
 							ans->err=NONE;
-							ans->answer = listar_archivos(wid, files);
+							ans->answer = listar_archivos(files);
 							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
 						}
 					}
@@ -97,14 +118,14 @@ void *worker(void *w_info){
 						
 						if(wid == atoi(request->arg0)){ //volvi
 							ans->err = NONE;
-							ans->answer = strcat(request->arg1, listar_archivos(wid, files));
+							ans->answer = strcat(request->arg1, listar_archivos(files));
 							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
 						}
 						else{
 							intern_request->op = LSD;
 							intern_request->origin = 0;
 							intern_request->arg0 = request->arg0;
-							intern_request->arg1 = strcat(request->arg1, listar_archivos(wid,files));
+							intern_request->arg1 = strcat(request->arg1, listar_archivos(files));
 							intern_request->arg2 = NULL;
 							intern_request->client_id = request->client_id;
 							intern_request->client_queue = request->client_queue;
@@ -127,55 +148,106 @@ void *worker(void *w_info){
 				
 					//Borrar el archivo si está en alguno
 					
-					//Mensaje externo
+					if(request->origin){
 						
-					if(archivo_abierto(wid,files,request->arg0) >= 0){		//Existe acá y está abierto
+						int status = borrar(files, request->arg0);
+						
+						if(status == 0){ //borrado
 							
-						if(request->origin){
+							ans->err = NONE;
 							ans->answer = NULL;
-							ans-> err = F_OPEN;
-							
 							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+							
 						}
-						//else ver si cualquier worker se puede comunicar con el handler.. 
-						//si puede la respuesta va directo al handler, de otro modo al worker arg1
+						else if(status == -1){ //error, abierto
+							 
+							 ans->err = F_OPEN;
+							 ans->answer = NULL;
+							 mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+							 
+						}
+						else{ //no existe, comprobar otros
 							
-					}
-					else if(archivo_abierto(wid,files,request->arg0) == -1){ //Existe cerrado acá
-							
-						File *prev = NULL;
-							
-						while (files != NULL){ //Revisar y ponerla en una función aparte tal vez
+							if(N_WORKERS == 1){
 								
-							if(strcmp(files->name, request->arg0) == 0){
-								(prev->next) = (files->next);
-								free(files);
-								break;
+								ans->err = NONE;
+								ans->answer = NULL;
+								mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+								
 							}
 							else{
-								prev = files;
-								files = files->next;	
+								
+								intern_request -> op = DEL;
+								intern_request -> origin = 0;
+								intern_request -> arg0 = request -> arg0;
+								asprintf(&(intern_request -> arg1), "%d", wid);
+								intern_request -> arg2 = "-2";
+								intern_request -> client_id = request -> client_id;
+								intern_request -> client_queue = request -> client_queue;
+ 					
+								if(wid == N_WORKERS - 1)
+									mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+								else
+									mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+
 							}
 						}
-						
-						if(request->origin){	
-							ans->answer = NULL;
-							ans->err = NONE;
-		
-							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
-						
-						}
-						//else request o error directo?
 					}
-					//else{	//No existe
-						//iniciar anillo
-					
-					
-					
+					else{
+							
+						if(atoi(request-> arg1) == wid){ //volví
+							
+							if(strcmp("-1", intern_request->arg2)){ //abierto, error
+								
+								ans->err = F_OPEN;
+								ans->answer = NULL;
+								mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+								
+							}
+							else{	//Borrado o no existe, OK
+								
+								ans->err = NONE;
+								ans->answer = NULL;
+								mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+								
+							}
+						}
+						else{
+							
+							int status = borrar(files, request->arg0);
+							
+							if(status == -2){
+									
+								if(wid == N_WORKERS - 1)
+									mq_send(wqueue[0], (char *) &request, sizeof(request), MAX_PRIORITY);
+								else
+									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), MAX_PRIORITY);	
+								
+							}
+							else{
+								
+									intern_request -> op = DEL;
+									intern_request -> origin = 0;
+									intern_request -> arg0 = request -> arg0;
+									intern_request -> arg1 = request -> arg1;
+									
+									if(status == -1)
+										intern_request -> arg2 = "-1";
+									else
+										intern_request -> arg2 = "0";
+										
+									intern_request -> client_id = request -> client_id;
+									intern_request -> client_queue = request -> client_queue;
+									
+									mq_send(wqueue[atoi(request->arg1)], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+							}
+						}
+					}			
 				}
+				
 				case CRE:{	//NE < -1
 					
-					if((request->origin) && (archivo_abierto(wid,files,request->arg0) > -2)){ //existe en worker ppal
+					if((request->origin) && (archivo_abierto(files,request->arg0) > -2)){ //existe en worker ppal
 		
 						ans->answer = NULL;
 						ans->err = F_EXIST;
@@ -183,7 +255,7 @@ void *worker(void *w_info){
 						mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
 					
 					}
-					else if((request->origin) && (archivo_abierto(wid,files,request->arg0) < -1)) { //No existe en ppal
+					else if((request->origin) && (archivo_abierto(files,request->arg0) < -1)) { //No existe en ppal
 						
 						//inicio anillo
 						intern_request -> op = CRE;
@@ -244,7 +316,7 @@ void *worker(void *w_info){
 						}
 						else{	//todavía no volví
 							
-							if(archivo_abierto(wid,files,request->arg0) > -2){ //existe
+							if(archivo_abierto(files,request->arg0) > -2){ //existe
 								
 								intern_request -> op = CRE;
 								intern_request -> origin = 0;
