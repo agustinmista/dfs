@@ -67,14 +67,22 @@ typedef struct _Worker_Info {
 	File *files;
 } Worker_Info;
 
+/*
+* 
+* Estructura para comunicar los pedidos de los clientes entre cada
+* handler y su proceso worker asignado y entre los distintos workers.
+* 
+*/
+
 typedef struct _Request {
-	Operation op;
-	int origin; //0 internas, >0 (1 preferentemente) externas
-	char *arg0;
+	Operation op; 		//Enum de operaciones: LSD, DEL, CRE, OPN, WRT, REA, CLO, BYE
+	int origin; 		//0 request internas, 1 request externa
+	int main_worker; 	//worker que recibió el request externo y debe responder
+	char *arg0;			
 	char *arg1;
 	char *arg2;
-	int client_id;
-	mqd_t *client_queue;
+	int client_id;		//ID del cliente que inició el request - necesario?
+	mqd_t *client_queue;	//Puntero a la cola del cliente	-> ver sin puntero
 } Request;
 
 typedef struct _Reply {

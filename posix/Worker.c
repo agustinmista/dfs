@@ -1,7 +1,6 @@
 #include "Common.h"
 #include "Worker.h"
-
-//HACER MACRO CON RESPUESTA SATISFACTORIA AL HANDLER
+#define SEND_ANS mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY)
 
 struct mq_attr attr;
 
@@ -21,6 +20,44 @@ int archivo_abierto(File *files, char *nombre){ //-2 no existe, -1 existe cerrad
 		files = files->next;
 	}
 	return -2;
+}
+
+int cerrar_archivo(File *files, int descriptor){ //0 si se pudo cerrar, -1 si ya estaba cerrado, -2 si no existe
+	
+	while(files != NULL){
+		if(files->fd == descriptor){
+			if((files->open) < 0)
+				return -1;
+			else{
+				files->open = -1;
+				return 0;
+			}
+			
+		files = files->next;
+		}
+	}
+	return -2;
+	
+}
+
+int abrir_archivo(int cID, File *files, char *nombre, int *obs){	//0 si se pudo abrir ->obs = fd, -1 si ya estaba abierto ->obs=cID, -2 si no existe
+	
+	while(files != NULL){
+		if(files->name == nombre){
+			if((files->open) < 0){
+				files->open = cID;
+				obs = &(files->fd);
+				return 0;
+			}
+			else{
+				obs = &(files->open);
+				return -1;
+			}
+		}	
+		files = files->next;
+	}
+	obs = NULL; //?
+	return -2;	
 }
 
 int borrar(File *files, char *nombre){
@@ -90,14 +127,15 @@ void *worker(void *w_info){
             
 			switch(request->op){
 				
-				case LSD:{
+				case LSD:{	//DONE
 					
 					if(request->origin){
 						
 						if(N_WORKERS > 1){
 							intern_request->op = LSD;
 							intern_request->origin = 0;
-							asprintf(&(intern_request -> arg0), "%d", wid);
+							intern_request->main_worker = request -> main_worker;
+							intern_request->arg0 = NULL;
 							intern_request->arg1 = NULL;
 							intern_request->arg2 = NULL;
 							intern_request->client_id = request->client_id;
@@ -111,21 +149,22 @@ void *worker(void *w_info){
 						else{
 							ans->err=NONE;
 							ans->answer = listar_archivos(files);
-							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+							SEND_ANS;
 						}
 					}
 					else{
 						
-						if(wid == atoi(request->arg0)){ //volvi
+						if(wid == request->main_worker){ //volvi
 							ans->err = NONE;
-							ans->answer = strcat(request->arg1, listar_archivos(files));
-							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+							ans->answer = strcat(request->arg0, listar_archivos(files));
+							SEND_ANS;
 						}
 						else{
 							intern_request->op = LSD;
 							intern_request->origin = 0;
-							intern_request->arg0 = request->arg0;
-							intern_request->arg1 = strcat(request->arg1, listar_archivos(files));
+							intern_request->main_worker = request->main_worker;
+							intern_request->arg0 = strcat(request->arg1, listar_archivos(files));
+							intern_request->arg1 = NULL;
 							intern_request->arg2 = NULL;
 							intern_request->client_id = request->client_id;
 							intern_request->client_queue = request->client_queue;
@@ -139,15 +178,8 @@ void *worker(void *w_info){
 					}
 					
 				}
-				case DEL:{ //Me falta terminar
+				case DEL:{	//DONE
 
-					//Crear una función que analice si el archivo
-					//se encuentra en este worker
-					//Si no está enviar mensaje indicando el comando y el nro
-					//de worker
-				
-					//Borrar el archivo si está en alguno
-					
 					if(request->origin){
 						
 						int status = borrar(files, request->arg0);
@@ -156,14 +188,14 @@ void *worker(void *w_info){
 							
 							ans->err = NONE;
 							ans->answer = NULL;
-							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+							SEND_ANS;
 							
 						}
 						else if(status == -1){ //error, abierto
 							 
 							 ans->err = F_OPEN;
 							 ans->answer = NULL;
-							 mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+							 SEND_ANS;
 							 
 						}
 						else{ //no existe, comprobar otros
@@ -172,16 +204,17 @@ void *worker(void *w_info){
 								
 								ans->err = NONE;
 								ans->answer = NULL;
-								mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+								SEND_ANS;
 								
 							}
 							else{
 								
 								intern_request -> op = DEL;
 								intern_request -> origin = 0;
+								intern_request -> main_worker = request->main_worker;
 								intern_request -> arg0 = request -> arg0;
-								asprintf(&(intern_request -> arg1), "%d", wid);
-								intern_request -> arg2 = "-2";
+								intern_request -> arg1 = "-2";
+								intern_request -> arg2 = NULL;
 								intern_request -> client_id = request -> client_id;
 								intern_request -> client_queue = request -> client_queue;
  					
@@ -195,20 +228,20 @@ void *worker(void *w_info){
 					}
 					else{
 							
-						if(atoi(request-> arg1) == wid){ //volví
+						if(request->main_worker == wid){ //volví
 							
-							if(strcmp("-1", intern_request->arg2)){ //abierto, error
+							if(strcmp("-1", intern_request->arg1)){ //abierto, error
 								
 								ans->err = F_OPEN;
 								ans->answer = NULL;
-								mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+								SEND_ANS;
 								
 							}
 							else{	//Borrado o no existe, OK
 								
 								ans->err = NONE;
 								ans->answer = NULL;
-								mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+								SEND_ANS;
 								
 							}
 						}
@@ -228,31 +261,31 @@ void *worker(void *w_info){
 								
 									intern_request -> op = DEL;
 									intern_request -> origin = 0;
+									intern_request -> main_worker = request -> main_worker;
 									intern_request -> arg0 = request -> arg0;
-									intern_request -> arg1 = request -> arg1;
 									
 									if(status == -1)
-										intern_request -> arg2 = "-1";
+										intern_request -> arg1 = "-1";
 									else
-										intern_request -> arg2 = "0";
+										intern_request -> arg1 = "0";
 										
+									intern_request -> arg2 = NULL;
 									intern_request -> client_id = request -> client_id;
 									intern_request -> client_queue = request -> client_queue;
 									
-									mq_send(wqueue[atoi(request->arg1)], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+									mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
 							}
 						}
 					}			
 				}
-				
-				case CRE:{	//NE < -1
+				case CRE:{	//DONE --unificar las llamadas a archivo_abierto!!
 					
 					if((request->origin) && (archivo_abierto(files,request->arg0) > -2)){ //existe en worker ppal
 		
 						ans->answer = NULL;
 						ans->err = F_EXIST;
 		
-						mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+						SEND_ANS;
 					
 					}
 					else if((request->origin) && (archivo_abierto(files,request->arg0) < -1)) { //No existe en ppal
@@ -260,9 +293,10 @@ void *worker(void *w_info){
 						//inicio anillo
 						intern_request -> op = CRE;
 						intern_request -> origin = 0;
+						intern_request -> main_worker = request -> main_worker;
 						intern_request -> arg0 = request -> arg0;
-						asprintf(&(intern_request -> arg1), "%d", wid);
-						intern_request -> arg2 = "0";
+						intern_request -> arg1 = "0";
+						intern_request -> arg2 = NULL;
 						intern_request -> client_id = request -> client_id;
 						intern_request -> client_queue = request -> client_queue;
  					
@@ -274,8 +308,8 @@ void *worker(void *w_info){
 					}
 					else if(!(request->origin)) { //Interno
 						
-						if(atoi(request -> arg1) == wid){ //volví
-							if(strcmp(request->arg2, "-1") == 0){ //existe
+						if(request->main_worker == wid){ //volví
+							if(strcmp(request->arg1, "-1") == 0){ //existe
 								
 								ans->answer = NULL;
 								ans->err = F_EXIST;
@@ -311,7 +345,7 @@ void *worker(void *w_info){
 								
 							}
 							
-							mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY);
+							SEND_ANS;
 							
 						}
 						else{	//todavía no volví
@@ -320,13 +354,14 @@ void *worker(void *w_info){
 								
 								intern_request -> op = CRE;
 								intern_request -> origin = 0;
+								intern_request -> main_worker = request -> main_worker;
 								intern_request -> arg0 = request -> arg0;
-								intern_request -> arg1 = request -> arg1; //id worker ppal
-								intern_request -> arg2 = "-1";
+								intern_request -> arg1 = "-1";
+								intern_request -> arg2 = NULL;
 								intern_request -> client_id = request -> client_id;
 								intern_request -> client_queue = request -> client_queue;
 							
-								mq_send(wqueue[atoi(request->arg1)], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY); 
+								mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY); 
 							
 							}
 							else{
@@ -343,7 +378,110 @@ void *worker(void *w_info){
 					}
 					
 				}
-				case OPN:{
+				case OPN:{	//Falta revisar bien pero creo que estaría
+				
+				int *code = malloc(sizeof(int));
+				code = NULL;
+				
+				if(request->origin){
+						
+						int status = abrir_archivo(request->client_id, files, request->arg0, code);
+					
+						if(status == -2){
+							
+							intern_request -> op = request -> op;
+							intern_request -> origin = 0;
+							intern_request -> main_worker = request -> main_worker;
+							intern_request -> arg0 = request -> arg0;
+							intern_request -> arg1 = "-2";
+							intern_request -> arg2 = NULL;
+							intern_request -> client_id = request -> client_id;
+							intern_request -> client_queue = request -> client_queue;
+							
+							if(N_WORKERS == 1){
+								
+								ans->err = F_NOTEXIST;
+								ans->answer = NULL;
+								SEND_ANS;
+								
+							}
+							else{	
+								if(wid == N_WORKERS - 1)
+									mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+								else
+									mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);						
+							}
+						}
+						else if(status == -1){
+							
+							ans->err = F_OPEN;
+							asprintf(&(ans->answer), "%d", *code); //cID que lo abrió
+							SEND_ANS;
+
+						}
+						else{
+							ans->err = NONE;
+							asprintf(&(ans->answer), "%d", *code);	//file descriptor
+							SEND_ANS;
+						}
+					}
+					else{
+						
+						if(request -> main_worker == wid){
+							
+							if(strcmp(request -> arg1, "-2") == 0){
+							
+								ans -> err = F_NOTEXIST;
+								ans -> answer = NULL;
+								SEND_ANS;			
+													
+							}
+							else if(strcmp(request -> arg1, "-1")){
+							
+								ans->err = F_OPEN;
+								asprintf(&(ans->answer), "%d", *(int *)(request->arg2)); //cID que lo abrió
+								SEND_ANS;
+
+							}
+							else{
+								ans->err = NONE;
+								asprintf(&(ans->answer), "%d", *(int *)(request->arg2));	//file descriptor
+								SEND_ANS;
+							}
+						}
+						else{
+							
+							int status = abrir_archivo(request->client_id, files, request->arg0, code);
+							
+							if(status == -2){
+								
+								if(wid == N_WORKERS - 1)
+									mq_send(wqueue[0], (char *) &request, sizeof(request), MAX_PRIORITY);
+								else
+									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), MAX_PRIORITY);						
+
+							}
+							else{
+								
+								intern_request -> op = request -> op;
+								intern_request -> origin = 0;
+								intern_request -> main_worker = request -> main_worker;
+								intern_request -> arg0 = request -> arg0;
+								if(status == -1)
+									intern_request -> arg1 = "-1";
+								else
+									intern_request -> arg1 = "0";
+									
+								intern_request -> arg2 = (char *)code;
+								intern_request -> client_id = request -> client_id;
+								intern_request -> client_queue = request -> client_queue;
+
+								mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+							}
+						}
+					}
+					
+					free(code);
 					
 				}
 				case WRT:{ 
@@ -352,7 +490,87 @@ void *worker(void *w_info){
 				case REA:{ 
 					
 				}
-				case CLO:{
+				case CLO:{	//DONE
+				
+					if(request->origin){
+						
+						int status = cerrar_archivo(files, atoi(request -> arg0));
+					
+						if(status == -2){
+							
+							intern_request -> op = request -> op;
+							intern_request -> origin = 0;
+							intern_request -> main_worker = request -> main_worker;
+							intern_request -> arg0 = request -> arg0;
+							intern_request -> arg1 = "-2";
+							intern_request -> arg2 = NULL;
+							intern_request -> client_id = request -> client_id;
+							intern_request -> client_queue = request -> client_queue;
+								
+							if(wid == N_WORKERS - 1)
+								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+							else
+								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);						
+						}
+						else{
+							
+							ans->err = NONE;
+							ans->answer = NULL;
+							SEND_ANS;
+
+						}
+					}
+					else{
+						
+						if(request -> main_worker == wid){
+							
+							if(strcmp(request -> arg1, "-2") == 0){
+							
+								ans -> err = F_NOTEXIST;
+								ans -> answer = NULL;
+								
+								SEND_ANS;								
+							}
+							else{
+								
+								ans -> err = NONE;
+								ans -> answer = NULL;
+					
+								SEND_ANS;
+								
+							}
+						}
+						else{
+							
+							int status = cerrar_archivo(files, atoi(request->arg0));
+							
+							if(status == -2){
+								
+								if(wid == N_WORKERS - 1)
+									mq_send(wqueue[0], (char *) &request, sizeof(request), MAX_PRIORITY);
+								else
+									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), MAX_PRIORITY);						
+
+							}
+							else{
+								
+								intern_request -> op = request -> op;
+								intern_request -> origin = 0;
+								intern_request -> main_worker = request -> main_worker;
+								intern_request -> arg0 = request -> arg0;
+								if(status == -1)
+									intern_request -> arg1 = "-1";
+								else
+									intern_request -> arg1 = "0";
+									
+								intern_request -> arg2 = NULL;
+								intern_request -> client_id = request -> client_id;
+								intern_request -> client_queue = request -> client_queue;
+
+								mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+							}
+						}
+					}					
 				
 				}
 				case BYE:{
