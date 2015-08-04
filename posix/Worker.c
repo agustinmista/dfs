@@ -699,7 +699,7 @@ void *worker(void *w_info){
 //                            				}
 //                            				ans -> err = NONE;
 //                            				ans ->answer = NULL;
-//                            				SEND_ANS;
+//                            				SEND_ANS();
 //                        			}
 //                			}
 //                			else{
@@ -711,7 +711,7 @@ void *worker(void *w_info){
 //                        				}
 //                        				ans -> err = NONE;
 //                        				ans ->answer = NULL;
-//                        				SEND_ANS;
+//                        				SEND_ANS();
 //                    				}
 //	
 //      				        else{
