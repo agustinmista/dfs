@@ -1,6 +1,6 @@
 #include "Common.h"
 #include "Worker.h"
-#define SEND_ANS mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 0)
+#define SEND_ANS() mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 0)
 
 struct mq_attr attr;
 
@@ -149,7 +149,7 @@ void *worker(void *w_info){
 						else{
 							ans->err=NONE;
 							ans->answer = listar_archivos(files);
-							SEND_ANS;
+							SEND_ANS();
 						}
 					}
 					else{
@@ -157,7 +157,7 @@ void *worker(void *w_info){
 						if(wid == request->main_worker){ //volvi
 							ans->err = NONE;
 							ans->answer = strcat(request->arg0, listar_archivos(files));
-							SEND_ANS;
+							SEND_ANS();
 						}
 						else{
 							intern_request->op = LSD;
@@ -188,14 +188,14 @@ void *worker(void *w_info){
 							
 							ans->err = NONE;
 							ans->answer = NULL;
-							SEND_ANS;
+							SEND_ANS();
 							
 						}
 						else if(status == -1){ //error, abierto
 							 
 							 ans->err = F_OPEN;
 							 ans->answer = NULL;
-							 SEND_ANS;
+							 SEND_ANS();
 							 
 						}
 						else{ //no existe, comprobar otros
@@ -204,7 +204,7 @@ void *worker(void *w_info){
 								
 								ans->err = NONE;
 								ans->answer = NULL;
-								SEND_ANS;
+								SEND_ANS();
 								
 							}
 							else{
@@ -234,14 +234,14 @@ void *worker(void *w_info){
 								
 								ans->err = F_OPEN;
 								ans->answer = NULL;
-								SEND_ANS;
+								SEND_ANS();
 								
 							}
 							else{	//Borrado o no existe, OK
 								
 								ans->err = NONE;
 								ans->answer = NULL;
-								SEND_ANS;
+								SEND_ANS();
 								
 							}
 						}
@@ -285,7 +285,7 @@ void *worker(void *w_info){
 						ans->answer = NULL;
 						ans->err = F_EXIST;
 		
-						SEND_ANS;
+						SEND_ANS();
 					
 					}
 					else if((request->origin) && (archivo_abierto(files,request->arg0) < -1)) { //No existe en ppal
@@ -345,7 +345,7 @@ void *worker(void *w_info){
 								
 							}
 							
-							SEND_ANS;
+							SEND_ANS();
 							
 						}
 						else{	//todavía no volví
@@ -402,7 +402,7 @@ void *worker(void *w_info){
 								
 								ans->err = F_NOTEXIST;
 								ans->answer = NULL;
-								SEND_ANS;
+								SEND_ANS();
 								
 							}
 							else{	
@@ -416,13 +416,13 @@ void *worker(void *w_info){
 							
 							ans->err = F_OPEN;
 							asprintf(&(ans->answer), "%d", *code); //cID que lo abrió
-							SEND_ANS;
+							SEND_ANS();
 
 						}
 						else{
 							ans->err = NONE;
 							asprintf(&(ans->answer), "%d", *code);	//file descriptor
-							SEND_ANS;
+							SEND_ANS();
 						}
 					}
 					else{
@@ -433,20 +433,20 @@ void *worker(void *w_info){
 							
 								ans -> err = F_NOTEXIST;
 								ans -> answer = NULL;
-								SEND_ANS;			
+								SEND_ANS();			
 													
 							}
 							else if(strcmp(request -> arg1, "-1")){
 							
 								ans->err = F_OPEN;
 								asprintf(&(ans->answer), "%d", *(int *)(request->arg2)); //cID que lo abrió
-								SEND_ANS;
+								SEND_ANS();
 
 							}
 							else{
 								ans->err = NONE;
 								asprintf(&(ans->answer), "%d", *(int *)(request->arg2));	//file descriptor
-								SEND_ANS;
+								SEND_ANS();
 							}
 						}
 						else{
@@ -487,8 +487,109 @@ void *worker(void *w_info){
 				case WRT:{ 
 					
 				}
-				case REA:{ 
+				case REA:{
 					
+					int found = 0;
+					
+					if((request->origin) || (!(request->origin)&&(request->main_worker != wid))){ //Pedido externo
+					
+						while(files != NULL){
+						
+							if(files->fd == atoi(request->arg0)){
+								
+								found = 1;
+								
+								if(files->open != wid){	
+									if(request->origin){
+										ans->err = F_CLOSED;
+										ans->answer = "El archivo no está abierto para éste worker.";
+										SEND_ANS();
+										break;
+									}
+									else{
+										intern_request -> op = request->op;
+										intern_request -> origin = 0;
+										intern_request -> main_worker = request -> main_worker;
+										intern_request -> arg0 = NULL;
+										intern_request -> arg1 = NULL;
+										intern_request -> arg2 = "-1";
+										intern_request -> client_id = request -> client_id;
+										intern_request -> client_queue = request -> client_queue;
+										
+										mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), 0);
+										break;
+									}
+								}
+								else{
+								
+									if((request->arg1) <= 0){
+											ans->err = NONE;
+											ans->answer = NULL;
+									}
+									else{
+										
+										char *aux = calloc(atoi(request->arg1) + 1, 1);
+										int n = 0;
+										
+										while((files->cursor < files->size) && (n < atoi(request->arg1))){
+											aux[n] = (files->content)[files->cursor];
+											n++;
+											(files->cursor)++;
+										}
+										
+										ans->err = NONE;
+										ans->answer = aux; //ver en donde hacer el free
+										
+											 
+									//el handler deber responder además haciendo un sizeof de answer
+									//mover cursor a donde corresponda
+									
+									}
+									SEND_ANS();
+									break;
+								}
+							
+							}
+							else
+								files = files->next;
+							
+						}
+						
+						if((N_WORKERS > 1) && (found == 0)){
+							
+							intern_request -> op = request->op;
+							intern_request -> origin = 0;
+							intern_request -> main_worker = request -> main_worker;
+							intern_request -> arg0 = request -> arg0;
+							intern_request -> arg1 = request -> arg1;
+							intern_request -> arg2 = "0";
+							intern_request -> client_id = request -> client_id;
+							intern_request -> client_queue = request -> client_queue;
+							
+							if(wid == N_WORKERS - 1)
+								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
+							else
+								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
+						
+						}
+						
+					}
+					else{	//volví
+							
+							if(strcmp(request->arg2, "0") == 0){ //Lectura satisfactoria
+								ans->err = NONE;
+								ans->answer = request->arg1;
+							}
+							else if(strcmp(request->arg2, "-1") == 0){ //Archivo cerrado 
+								ans->err = F_CLOSED;
+								ans->answer = "El archivo no está abierto para éste worker.";
+							}
+							else{
+								ans->err = BAD_FD;	//Les parece o eso era mas para el handler?
+								ans->answer = NULL;
+							}
+							SEND_ANS();
+					}	
 				}
 				case CLO:{	//DONE
 				
@@ -516,7 +617,7 @@ void *worker(void *w_info){
 							
 							ans->err = NONE;
 							ans->answer = NULL;
-							SEND_ANS;
+							SEND_ANS();
 
 						}
 					}
@@ -529,14 +630,14 @@ void *worker(void *w_info){
 								ans -> err = F_NOTEXIST;
 								ans -> answer = NULL;
 								
-								SEND_ANS;								
+								SEND_ANS();								
 							}
 							else{
 								
 								ans -> err = NONE;
 								ans -> answer = NULL;
 					
-								SEND_ANS;
+								SEND_ANS();
 								
 							}
 						}
