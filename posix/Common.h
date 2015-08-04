@@ -20,8 +20,6 @@
 #define N_WORKERS 5
 #define MAX_MESSAGES 10
 #define MSG_SIZE 1024 //VER size
-#define MAX_PRIORITY 32768
-
 
 typedef enum _Operation {
     LSD,

@@ -32,7 +32,7 @@ void *init_dispatcher(void *s){
         attr.mq_curmsgs = 0;
         
         mqd_t client_queue;
-        if((client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0666, &attr)) == (mqd_t) -1)
+        if((client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0644, &attr)) == (mqd_t) -1)
             ERROR("DFS_SERVER: Error opening message queue for the new client.\n");
         
         Session *newSession = (Session *) malloc(sizeof(Session));
@@ -40,7 +40,7 @@ void *init_dispatcher(void *s){
         newSession->worker_id    = getWorkerId();
         newSession->client_queue = client_queue;
         newSession->worker_queue = worker_queues[newSession->worker_id];
-            
+        
         // Spawn a ClientHandler for the new client
         if (pthread_create(&new_client, NULL, handle_client, newSession) != 0)
                 ERROR("DFS_SERVER: Error creating pthread.\n"); 

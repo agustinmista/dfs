@@ -1,6 +1,6 @@
 #include "Common.h"
 #include "Worker.h"
-#define SEND_ANS mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), MAX_PRIORITY)
+#define SEND_ANS mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 0)
 
 struct mq_attr attr;
 
@@ -81,7 +81,7 @@ int borrar(File *files, char *nombre){
 	
 }
 
-char * listar_archivos(File *files){
+char *listar_archivos(File *files){
 	
 	if(files == NULL)
 		return " ";
@@ -101,29 +101,29 @@ void *worker(void *w_info){
 	File *files = NULL;
 	File *files_init = NULL;
     
-    char message[MSG_SIZE+1];
+    char message[MSG_SIZE];
     Request *request;
     Request *intern_request = malloc(sizeof(Request));
 	Reply *ans = malloc(sizeof(Reply));
 	
     // Parse worker args
-    int wid      = ((Worker_Info *)w_info)->id;
+    int wid = ((Worker_Info *)w_info)->id;
     mqd_t *wqueue = ((Worker_Info *)w_info)->queue;
     free(w_info);	
     
     int readed;
+
     
     while(1){
         
-        memset(message, 0, MSG_SIZE+1);
+        memset(message, 0, MSG_SIZE);
         ans->err = NONE;
         ans->answer = "";
         files = files_init;
         
-        if((readed = mq_receive(wqueue[wid], message, sizeof(message), NULL)) >= 0){
-		      
+        if((readed = mq_receive(wqueue[wid], message, MSG_SIZE+1, NULL)) >= 0){
+            
 			request = (Request *) message;
-			printf("Recibí una request de %d\n", request->client_id);
             
 			switch(request->op){
 				
@@ -142,9 +142,9 @@ void *worker(void *w_info){
 							intern_request->client_queue = request->client_queue;
 						
 							if(wid  == N_WORKERS - 1)
-								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
 							else
-								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
 						}
 						else{
 							ans->err=NONE;
@@ -170,9 +170,9 @@ void *worker(void *w_info){
 							intern_request->client_queue = request->client_queue;
 						
 							if(wid  == N_WORKERS - 1)
-								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
 							else
-								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
 
 						}
 					}
@@ -219,9 +219,9 @@ void *worker(void *w_info){
 								intern_request -> client_queue = request -> client_queue;
  					
 								if(wid == N_WORKERS - 1)
-									mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+									mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
 								else
-									mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+									mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
 
 							}
 						}
@@ -252,9 +252,9 @@ void *worker(void *w_info){
 							if(status == -2){
 									
 								if(wid == N_WORKERS - 1)
-									mq_send(wqueue[0], (char *) &request, sizeof(request), MAX_PRIORITY);
+									mq_send(wqueue[0], (char *) &request, sizeof(request), 0);
 								else
-									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), MAX_PRIORITY);	
+									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), 0);	
 								
 							}
 							else{
@@ -273,7 +273,7 @@ void *worker(void *w_info){
 									intern_request -> client_id = request -> client_id;
 									intern_request -> client_queue = request -> client_queue;
 									
-									mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+									mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), 0);
 							}
 						}
 					}			
@@ -301,9 +301,9 @@ void *worker(void *w_info){
 						intern_request -> client_queue = request -> client_queue;
  					
 						if(wid == N_WORKERS - 1)
-							mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+							mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
 						else
-							mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+							mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
 							
 					}
 					else if(!(request->origin)) { //Interno
@@ -361,15 +361,15 @@ void *worker(void *w_info){
 								intern_request -> client_id = request -> client_id;
 								intern_request -> client_queue = request -> client_queue;
 							
-								mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY); 
+								mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), 0); 
 							
 							}
 							else{
 								
 								if(wid == N_WORKERS - 1)
-									mq_send(wqueue[0], (char *) &request, sizeof(request), MAX_PRIORITY);
+									mq_send(wqueue[0], (char *) &request, sizeof(request), 0);
 								else
-									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), MAX_PRIORITY);
+									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), 0);
 							
 							}
 							
@@ -407,9 +407,9 @@ void *worker(void *w_info){
 							}
 							else{	
 								if(wid == N_WORKERS - 1)
-									mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+									mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
 								else
-									mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);						
+									mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);						
 							}
 						}
 						else if(status == -1){
@@ -456,9 +456,9 @@ void *worker(void *w_info){
 							if(status == -2){
 								
 								if(wid == N_WORKERS - 1)
-									mq_send(wqueue[0], (char *) &request, sizeof(request), MAX_PRIORITY);
+									mq_send(wqueue[0], (char *) &request, sizeof(request), 0);
 								else
-									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), MAX_PRIORITY);						
+									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), 0);						
 
 							}
 							else{
@@ -476,7 +476,7 @@ void *worker(void *w_info){
 								intern_request -> client_id = request -> client_id;
 								intern_request -> client_queue = request -> client_queue;
 
-								mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+								mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), 0);
 							}
 						}
 					}
@@ -508,9 +508,9 @@ void *worker(void *w_info){
 							intern_request -> client_queue = request -> client_queue;
 								
 							if(wid == N_WORKERS - 1)
-								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
 							else
-								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);						
+								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);						
 						}
 						else{
 							
@@ -547,9 +547,9 @@ void *worker(void *w_info){
 							if(status == -2){
 								
 								if(wid == N_WORKERS - 1)
-									mq_send(wqueue[0], (char *) &request, sizeof(request), MAX_PRIORITY);
+									mq_send(wqueue[0], (char *) &request, sizeof(request), 0);
 								else
-									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), MAX_PRIORITY);						
+									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), 0);						
 
 							}
 							else{
@@ -567,7 +567,7 @@ void *worker(void *w_info){
 								intern_request -> client_id = request -> client_id;
 								intern_request -> client_queue = request -> client_queue;
 
-								mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+								mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), 0);
 							}
 						}
 					}					
@@ -600,7 +600,7 @@ int init_workers(){
         attr.mq_msgsize = MSG_SIZE;  
         attr.mq_curmsgs = 0;
         
-        if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0666, &attr)) == (mqd_t) -1)
+        if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0644, &attr)) == (mqd_t) -1)
             ERROR("\nDFS_SERVER: Error opening message queue for workers\n");
         
         Worker_Info *newWorker = malloc(sizeof (Worker_Info));

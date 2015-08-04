@@ -2,7 +2,7 @@
 #include "ClientHandler.h"
 
 #define SEND2CLIENT(fmt,...)    write(client_id, buffer_out, sprintf(buffer_out, fmt, ##__VA_ARGS__))
-#define SEND_REQ(request)       mq_send(worker_queue, (char *) &request, sizeof(Request), MAX_PRIORITY)
+#define SEND_REQ(request)       mq_send(worker_queue, (char *) &request, sizeof(Request), 0)
 #define RECV_ANS()              mq_receive(client_queue, buffer_in, MSG_SIZE, NULL)
 
 //printf(%.*s\n", size, buffer);  imprime los primeros size caracteres de buffer
@@ -97,9 +97,10 @@ void *handle_client(void *s){
             if(req){
                 print_request(req);
 
-                if(SEND_REQ(req) != 0) ERROR("DFS_SERVER: Error sending request to worker\n");
+                     
+ //               if(SEND_REQ(req) != 0) ERROR("DFS_SERVER: Error sending request to worker\n");
                 
-                if((readed = RECV_ANS())) ERROR("DFS_SERVER: Error receiving answer from worker\n");
+                //if((readed = RECV_ANS())) ERROR("DFS_SERVER: Error receiving answer from worker\n");
 
 //               Reply *ans ; // = RECV_ANS();
 //                ans->err = BAD_FD;
