@@ -675,7 +675,62 @@ void *worker(void *w_info){
 				
 				}
 				case BYE:{
-					
+//                    			int s;
+//                    			if(request->origin){
+//                        			if(N_WORKERS > 1){
+//                		    			intern_request->op = BYE;
+//                					intern_request->origin = 0;
+//                					intern_request->main_worker = request -> main_worker;
+//                		    			intern_request->arg0 = NULL;
+//                		    			intern_request->arg1 = NULL;
+//                					intern_request->arg2 = NULL;
+//                					intern_request->client_id = request->client_id;
+//                					intern_request->client_queue = request->client_queue;			
+//            
+//			                            	if (wid == N_WORKERS - 1)
+//                        			        	mq_send(wqueue[0],(char *) &intern_request,sizeof(intern_request), MAX_PRIORITY);
+//                            			    	else 
+//                                				mq_send(wqueue[N_WORKERS + 1],(char *) &intern_request,sizeof(intern_request), MAX_PRIORITY);
+//                        			}
+//                        			else{
+//                            				while (files != NULL){
+//                                				s = cerrar_archivo(files,atoi(files->name));
+//                                				files = files -> next;
+//                            				}
+//                            				ans -> err = NONE;
+//                            				ans ->answer = NULL;
+//                            				SEND_ANS;
+//                        			}
+//                			}
+//                			else{
+//						if (wid == request->main_worker){
+//    
+//                        				while (files != NULL){
+//                            					s = cerrar_archivo(files,atoi(files->name));
+//                            					files = files -> next;
+//                        				}
+//                        				ans -> err = NONE;
+//                        				ans ->answer = NULL;
+//                        				SEND_ANS;
+//                    				}
+//	
+//      				        else{
+//          						intern_request->op = BYE;
+//          						intern_request->origin = 0;
+//            						intern_request->main_worker = request->main_worker;
+//            						intern_request->arg0 = NULL;
+//            						intern_request->arg1 = NULL;
+//                					intern_request->arg2 = NULL;
+//            						intern_request->client_id = request->client_id;
+//            						intern_request->client_queue = request->client_queue;            
+//			                        
+//                        				if (wid == N_WORKERS - 1) 
+//                            					mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+//            						else
+//            							mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), MAX_PRIORITY);
+//               
+//                   				}	
+//                			}					
 				}
 			}
 			
