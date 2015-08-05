@@ -8,6 +8,8 @@ int file_descriptor = INIT_FD;
 pthread_mutex_t fd_mutex = PTHREAD_MUTEX_INITIALIZER;
 int tmp_fd;
 
+//Ver comprobaciones de malloc y otras..
+
 int archivo_abierto(File *files, char *nombre){ //-2 no existe, -1 existe cerrado, id existe abierto por id
 
 	while(files != NULL){
@@ -30,6 +32,7 @@ int cerrar_archivo(File *files, int descriptor){ //0 si se pudo cerrar, -1 si ya
 				return -1;
 			else{
 				files->open = -1;
+				files->cursor = 0;
 				return 0;
 			}
 			
@@ -484,14 +487,105 @@ void *worker(void *w_info){
 					free(code);
 					
 				}
-				case WRT:{ 
+				case WRT:{ //Falta analizar un caso
+					//
+					int found = 0;
 					
+					if((request->origin) || (!(request->origin)&&(request->main_worker != wid))){ //Pedido externo o interno distinto del ppal
+					
+						while(files != NULL){
+						
+							if(files->fd == atoi(request->arg0)){
+								
+								found = 1;
+								
+								if(files->open != wid){	
+									if(request->origin){
+										ans->err = F_CLOSED;
+										ans->answer = "El archivo no está abierto para éste worker.";
+										SEND_ANS();
+										break;
+									}
+									else{
+										intern_request -> op = request->op;
+										intern_request -> origin = 0;
+										intern_request -> main_worker = request -> main_worker;
+										intern_request -> arg0 = NULL;
+										intern_request -> arg1 = NULL;
+										intern_request -> arg2 = "-1";
+										intern_request -> client_id = request -> client_id;
+										intern_request -> client_queue = request -> client_queue;
+										
+										mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), 0);
+										break;
+									}
+								}
+								else{
+								
+									if((request->arg1) <= 0){
+											ans->err = NONE;
+											ans->answer = NULL;
+									}
+									else{
+										
+										strcat(files->content, request->arg2),
+										
+										ans->err = NONE; //cambiar por casos - ARREGLAR!!
+										ans->answer = NULL; //ver en donde hacer el free
+									
+									}
+									SEND_ANS();
+									break;
+								}
+							
+							}
+							else
+								files = files->next;
+							
+						}
+						
+						if((N_WORKERS > 1) && (found == 0)){
+							
+							intern_request -> op = request->op;
+							intern_request -> origin = 0;
+							intern_request -> main_worker = request -> main_worker;
+							intern_request -> arg0 = request -> arg0;
+							intern_request -> arg1 = request -> arg1;
+							intern_request -> arg2 = request->arg2;
+							intern_request -> client_id = request -> client_id;
+							intern_request -> client_queue = request -> client_queue;
+							
+							if(wid == N_WORKERS - 1)
+								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
+							else
+								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
+						
+						}
+						
+					}
+					else{	//volví
+							
+							if(strcmp(request->arg2, "0") == 0){ //Lectura satisfactoria
+								ans->err = NONE;
+								ans->answer = request->arg1;
+							}
+							else if(strcmp(request->arg2, "-1") == 0){ //Archivo cerrado 
+								ans->err = F_CLOSED;
+								ans->answer = "El archivo no está abierto para éste worker.";
+							}
+							else{
+								ans->err = BAD_FD;	//Les parece o eso era mas para el handler?
+								ans->answer = NULL;
+							}
+							SEND_ANS();
+					}	
+					//
 				}
 				case REA:{
 					
 					int found = 0;
 					
-					if((request->origin) || (!(request->origin)&&(request->main_worker != wid))){ //Pedido externo
+					if((request->origin) || (!(request->origin)&&(request->main_worker != wid))){ //Pedido externo o interno distinto del ppal
 					
 						while(files != NULL){
 						
