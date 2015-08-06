@@ -19,7 +19,7 @@
 
 #define N_WORKERS 5
 #define MAX_MESSAGES 10
-#define MSG_SIZE 1024 //VER size
+#define MSG_SIZE 1024
 
 typedef enum _Operation {
     LSD,
@@ -46,7 +46,7 @@ typedef struct _Session {
 	int client_id;
 	int worker_id;
 	mqd_t worker_queue;
-	mqd_t client_queue;
+	mqd_t *client_queue;
 } Session;
 
 typedef struct _File {
@@ -74,7 +74,7 @@ typedef struct _Worker_Info {
 
 typedef struct _Request {
 	Operation op; 		//Enum de operaciones: LSD, DEL, CRE, OPN, WRT, REA, CLO, BYE
-	int origin; 		//0 request internas, 1 request externa
+	int external; 		//0 request internas, 1 request externa
 	int main_worker; 	//worker que recibió el request externo y debe responder
 	char *arg0;			
 	char *arg1;

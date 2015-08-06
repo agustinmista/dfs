@@ -23,29 +23,25 @@ void *init_dispatcher(void *s){
             ERROR("DFS_SERVER: Error dispatching new connection.\n");
         
         // Create a session for the new client and asign a worker
-        char *client_name;
-        asprintf(&client_name, "/c%d", conn_id);
-        
-        attr.mq_flags = 0;  
-        attr.mq_maxmsg = MAX_MESSAGES;  
-        attr.mq_msgsize = MSG_SIZE;  
-        attr.mq_curmsgs = 0;
-        
-        mqd_t client_queue;
-        if((client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0644, &attr)) == (mqd_t) -1)
-            ERROR("DFS_SERVER: Error opening message queue for the new client.\n");
-        
         Session *newSession = (Session *) malloc(sizeof(Session));
         newSession->client_id    = conn_id;   // aprovecho el id del socket
         newSession->worker_id    = getWorkerId();
-        newSession->client_queue = client_queue;
+        newSession->client_queue = malloc(sizeof(mqd_t*));
         newSession->worker_queue = worker_queues[newSession->worker_id];
+             
+        char *client_name;
+        asprintf(&client_name, "/c%d", conn_id);
+        
+        mqd_t *client_queue = (mqd_t*) newSession->client_queue;
+        if((*client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0644, &attr)) == (mqd_t)-1)
+            ERROR("DFS_SERVER: Error opening message queue for the new client.\n");
+
         
         // Spawn a ClientHandler for the new client
         if (pthread_create(&new_client, NULL, handle_client, newSession) != 0)
                 ERROR("DFS_SERVER: Error creating pthread.\n"); 
 
-        printf("DFS_SERVER: New client!\t(id: %d)\t(worker: %d)\n",
+        printf("DFS_SERVER: New client!\t[id: %d]\t[worker: %d]\n",
                newSession->client_id, newSession->worker_id);
         
     }

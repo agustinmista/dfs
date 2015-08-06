@@ -2,15 +2,11 @@
 #include "ClientHandler.h"
 
 #define SEND2CLIENT(fmt,...)    write(client_id, buffer_out, sprintf(buffer_out, fmt, ##__VA_ARGS__))
-#define SEND_REQ(request)       mq_send(worker_queue, (char *) &request, sizeof(Request), 0)
+#define SEND_REQ(request)       mq_send(worker_queue, (char *) request, sizeof(Request), 1)
 #define RECV_ANS()              mq_receive(client_queue, buffer_in, MSG_SIZE, NULL)
 
 //printf(%.*s\n", size, buffer);  imprime los primeros size caracteres de buffer
 
-void print_request(Request *r){
-    printf("REQUEST: [id: %d] [op: %d] [arg0:'%s'] [arg1:'%s\'] [arg2:'%s']\n",
-           r->client_id, r->op, r->arg0, r->arg1, r->arg2);
-}
 
 void *handle_client(void *s){
     int identified = 0;
@@ -26,10 +22,13 @@ void *handle_client(void *s){
     int client_id      = session->client_id;
 //	int worker_id      = session->worker_id;     // unused :/ lo removemos de session?
 	mqd_t worker_queue = session->worker_queue;
-	mqd_t client_queue = session->client_queue;
-    
+	mqd_t client_queue = *(session->client_queue);
+
     // Client handle loop
     while(1){
+        
+        SEND2CLIENT("dfs> ");
+        
         if ((readed = read(client_id, buffer_in, MSG_SIZE)) <= 0){
             printf("DFS_SERVER: Client (id: %d) disconected.\n", client_id);
             break;
@@ -47,61 +46,60 @@ void *handle_client(void *s){
                 
             if (strlen(buffer_in) < 3){
                 req = NULL;
-                SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
                                 
             } else if (!strncmp(buffer_in, "LSD", 3)) {     
                 if (!(req = parseRequest(session, LSD, buffer_in)))
-                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                    SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
                 
             } else if (!strncmp(buffer_in, "DEL", 3)) {
                 if (!(req = parseRequest(session, DEL, buffer_in)))
-                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                    SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
                 
             } else if (!strncmp(buffer_in, "CRE", 3)) {     
                 if (!(req = parseRequest(session, CRE, buffer_in)))
-                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                    SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
                 
             } else if (!strncmp(buffer_in, "OPN", 3)) {     
                 if (!(req = parseRequest(session, OPN, buffer_in)))
-                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                    SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
                 
             } else if (!strncmp(buffer_in, "WRT", 3)) {  
                 if (!(req = parseRequest(session, WRT, buffer_in)))
-                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                    SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
                 
             } else if (!strncmp(buffer_in, "REA", 3)) {  
                 if (!(req = parseRequest(session, REA, buffer_in)))
-                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                    SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
                 
             } else if (!strncmp(buffer_in, "CLO", 3)) {  
                 if (!(req = parseRequest(session, CLO, buffer_in)))
-                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                    SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
                 
             } else if (!strncmp(buffer_in, "BYE", 3)){
                 if (!(req = parseRequest(session, BYE, buffer_in))) 
-                    SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                    SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
                 identified = 0;
-                SEND2CLIENT("> OK\n");  
+                SEND2CLIENT("dfs> OK\n");  
                 
             } else if (!strncmp(buffer_in, "CON", 3)){
                 req = NULL;
-                SEND2CLIENT("> ERROR: ALREADY IDENTIFIED\n");    
+                SEND2CLIENT("dfs> ERROR: ALREADY IDENTIFIED\n");    
                 
             } else {
                 req = NULL;
-                SEND2CLIENT("> ERROR: BAD COMMAND\n");
+                SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
             }
             
             
             // If we generate a request, send it, wait for response and print results
             if(req){
-                print_request(req);
-
                      
- //               if(SEND_REQ(req) != 0) ERROR("DFS_SERVER: Error sending request to worker\n");
+                if(SEND_REQ(req) != 0) ERROR("DFS_SERVER: Error sending request to worker\n");
                 
-                //if((readed = RECV_ANS())) ERROR("DFS_SERVER: Error receiving answer from worker\n");
-
+                
+//                if((readed = RECV_ANS())) ERROR("DFS_SERVER: Error receiving answer from worker\n");
+//                SEND2CLIENT("YA RECIBí!\n");
 //               Reply *ans ; // = RECV_ANS();
 //                ans->err = BAD_FD;
 //                
@@ -109,29 +107,29 @@ void *handle_client(void *s){
 //                    // If no errors, print ok + extra data depending on command
 //                    case NONE:
 //                        if (req->op == OPN || req->op == REA || req->op == LSD) 
-//                            SEND2CLIENT("> OK: %s\n", ans->answer);
+//                            SEND2CLIENT("dfs> OK: %s\n", ans->answer);
 //                        else 
-//                            SEND2CLIENT("> OK\n");
+//                            SEND2CLIENT("dfs> OK\n");
 //                        break;
 //                    
 //                    // Otherwise, print error
 //                    case BAD_FD:
-//                        SEND2CLIENT("> ERROR: BAD FD\n");
+//                        SEND2CLIENT("dfs> ERROR: BAD FD\n");
 //                        break;
 //                    case BAD_ARG:
-//                        SEND2CLIENT("> ERROR: BAD ARG\n");
+//                        SEND2CLIENT("dfs> ERROR: BAD ARG\n");
 //                        break;
 //                    case F_OPEN:
-//                        SEND2CLIENT("> ERROR: FILE ALREADY OPEN\n");
+//                        SEND2CLIENT("dfs> ERROR: FILE ALREADY OPEN\n");
 //                        break;                    
 //                    case F_CLOSED:
-//                        SEND2CLIENT("> ERROR: FILE IS CLOSED\n");
+//                        SEND2CLIENT("dfs> ERROR: FILE IS CLOSED\n");
 //                        break;
 //                    case F_EXIST:
-//                        SEND2CLIENT("> ERROR: FILE ALREADY EXIST\n");
+//                        SEND2CLIENT("dfs> ERROR: FILE ALREADY EXIST\n");
 //                        break;                    
 //                    case F_NOTEXIST:
-//                        SEND2CLIENT("> ERROR: FILE NOT EXIST\n");
+//                        SEND2CLIENT("dfs> ERROR: FILE NOT EXIST\n");
 //                        break;
 //                }
 //                
@@ -142,9 +140,9 @@ void *handle_client(void *s){
             
         } else if(!strncmp(buffer_in, "CON", 3)) {
             identified = 1;
-            SEND2CLIENT("> OK ID %d\n", client_id); 
+            SEND2CLIENT("dfs> OK ID %d\n", client_id); 
         } else
-            SEND2CLIENT("> ERROR NOT IDENTIFIED\n");
+            SEND2CLIENT("dfs> ERROR NOT IDENTIFIED\n");
     }
     
     // Close everything
@@ -169,7 +167,7 @@ Request *parseRequest(Session *s, Operation op, char *string){
     req->arg1 = NULL;
     req->arg1 = NULL;
     req->client_id = s->client_id;
-    req->client_queue = &(s->client_queue);
+    req->client_queue = s->client_queue;
     
     // Ignore "CMD"
     if(!(strtok_r(string, " ", &saveptr))) return NULL;

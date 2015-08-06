@@ -1,6 +1,6 @@
 #include "Common.h"
 #include "Worker.h"
-#define SEND_ANS() mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 0)
+#define SEND_ANS() mq_send(*(request->client_queue), (char *) &ans, sizeof(ans), 1)
 
 struct mq_attr attr;
 
@@ -10,7 +10,12 @@ int tmp_fd;
 
 //Ver comprobaciones de malloc y otras..
 
-int archivo_abierto(File *files, char *nombre){ //-2 no existe, -1 existe cerrado, id existe abierto por id
+void print_request(int wid, Request *r){    
+    printf("DFS_SERVER_REQ: [worker: %d] [id: %d] [op: %d] [arg0:'%s'] [arg1:'%s\'] [arg2:'%s']\n",
+           wid, r->client_id, r->op, r->arg0, r->arg1, r->arg2);
+}
+
+int is_open(File *files, char *nombre){ //-2 no existe, -1 existe cerrado, id existe abierto por id
 
 	while(files != NULL){
 		if(strcmp(files->name, nombre) == 0){
@@ -24,7 +29,7 @@ int archivo_abierto(File *files, char *nombre){ //-2 no existe, -1 existe cerrad
 	return -2;
 }
 
-int cerrar_archivo(File *files, int descriptor){ //0 si se pudo cerrar, -1 si ya estaba cerrado, -2 si no existe
+int close_file(File *files, int descriptor){ //0 si se pudo cerrar, -1 si ya estaba cerrado, -2 si no existe
 	
 	while(files != NULL){
 		if(files->fd == descriptor){
@@ -43,7 +48,7 @@ int cerrar_archivo(File *files, int descriptor){ //0 si se pudo cerrar, -1 si ya
 	
 }
 
-int abrir_archivo(int cID, File *files, char *nombre, int *obs){	//0 si se pudo abrir ->obs = fd, -1 si ya estaba abierto ->obs=cID, -2 si no existe
+int open_file(int cID, File *files, char *nombre, int *obs){	//0 si se pudo abrir ->obs = fd, -1 si ya estaba abierto ->obs=cID, -2 si no existe
 	
 	while(files != NULL){
 		if(files->name == nombre){
@@ -63,7 +68,7 @@ int abrir_archivo(int cID, File *files, char *nombre, int *obs){	//0 si se pudo 
 	return -2;	
 }
 
-int borrar(File *files, char *nombre){
+int delete_file(File *files, char *nombre){
 	
 	File *prev = NULL;
 	
@@ -84,7 +89,7 @@ int borrar(File *files, char *nombre){
 	
 }
 
-char *listar_archivos(File *files){
+char *list_files(File *files){
 	
 	if(files == NULL)
 		return " ";
@@ -104,7 +109,9 @@ void *worker(void *w_info){
 	File *files = NULL;
 	File *files_init = NULL;
     
-    char message[MSG_SIZE];
+    char buffer_in[MSG_SIZE+1];
+    int readed;
+    
     Request *request;
     Request *intern_request = malloc(sizeof(Request));
 	Reply *ans = malloc(sizeof(Reply));
@@ -112,31 +119,30 @@ void *worker(void *w_info){
     // Parse worker args
     int wid = ((Worker_Info *)w_info)->id;
     mqd_t *wqueue = ((Worker_Info *)w_info)->queue;
-    free(w_info);	
+    free(w_info);	   
     
-    int readed;
-
-    
+    // Loop infinito hasta que resolvamos las operaciones, vamos metiendolas adentro 
+    // a medida que funcionan
     while(1){
-        
-        memset(message, 0, MSG_SIZE);
-        ans->err = NONE;
-        ans->answer = "";
+        if((readed = mq_receive(wqueue[wid], buffer_in, MSG_SIZE+1, NULL)) >= 0){
+            request = (Request *) buffer_in;
+            print_request(wid, request);
+    }
+    
+    
+    
+    while(0){
+
         files = files_init;
-        
-        if((readed = mq_receive(wqueue[wid], message, MSG_SIZE+1, NULL)) >= 0){
-            
-			request = (Request *) message;
-            
+
 			switch(request->op){
 				
-				case LSD:{	//DONE
+				case LSD:	//DONE
 					
-					if(request->origin){
-						
+					if(request->external){
 						if(N_WORKERS > 1){
 							intern_request->op = LSD;
-							intern_request->origin = 0;
+							intern_request->external = 0;
 							intern_request->main_worker = request -> main_worker;
 							intern_request->arg0 = NULL;
 							intern_request->arg1 = NULL;
@@ -148,25 +154,23 @@ void *worker(void *w_info){
 								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
 							else
 								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
-						}
-						else{
+						} else {
 							ans->err=NONE;
-							ans->answer = listar_archivos(files);
+							ans->answer = list_files(files);
 							SEND_ANS();
 						}
-					}
-					else{
+                        
+					} else {
 						
 						if(wid == request->main_worker){ //volvi
 							ans->err = NONE;
-							ans->answer = strcat(request->arg0, listar_archivos(files));
+							ans->answer = strcat(request->arg0, list_files(files));
 							SEND_ANS();
-						}
-						else{
+						} else {
 							intern_request->op = LSD;
-							intern_request->origin = 0;
+							intern_request->external = 0;
 							intern_request->main_worker = request->main_worker;
-							intern_request->arg0 = strcat(request->arg1, listar_archivos(files));
+							intern_request->arg0 = strcat(request->arg1, list_files(files));
 							intern_request->arg1 = NULL;
 							intern_request->arg2 = NULL;
 							intern_request->client_id = request->client_id;
@@ -176,16 +180,14 @@ void *worker(void *w_info){
 								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
 							else
 								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
-
 						}
 					}
-					
-				}
+					break;
+                    
 				case DEL:{	//DONE
-
-					if(request->origin){
+					if(request->external){
 						
-						int status = borrar(files, request->arg0);
+						int status = delete_file(files, request->arg0);
 						
 						if(status == 0){ //borrado
 							
@@ -213,7 +215,7 @@ void *worker(void *w_info){
 							else{
 								
 								intern_request -> op = DEL;
-								intern_request -> origin = 0;
+								intern_request -> external = 0;
 								intern_request -> main_worker = request->main_worker;
 								intern_request -> arg0 = request -> arg0;
 								intern_request -> arg1 = "-2";
@@ -250,7 +252,7 @@ void *worker(void *w_info){
 						}
 						else{
 							
-							int status = borrar(files, request->arg0);
+							int status = delete_file(files, request->arg0);
 							
 							if(status == -2){
 									
@@ -263,7 +265,7 @@ void *worker(void *w_info){
 							else{
 								
 									intern_request -> op = DEL;
-									intern_request -> origin = 0;
+									intern_request -> external = 0;
 									intern_request -> main_worker = request -> main_worker;
 									intern_request -> arg0 = request -> arg0;
 									
@@ -281,9 +283,11 @@ void *worker(void *w_info){
 						}
 					}			
 				}
-				case CRE:{	//DONE --unificar las llamadas a archivo_abierto!!
+                break;
+                    
+				case CRE:{	//DONE --unificar las llamadas a is_open!!
 					
-					if((request->origin) && (archivo_abierto(files,request->arg0) > -2)){ //existe en worker ppal
+					if((request->external) && (is_open(files,request->arg0) > -2)){ //existe en worker ppal
 		
 						ans->answer = NULL;
 						ans->err = F_EXIST;
@@ -291,11 +295,11 @@ void *worker(void *w_info){
 						SEND_ANS();
 					
 					}
-					else if((request->origin) && (archivo_abierto(files,request->arg0) < -1)) { //No existe en ppal
+					else if((request->external) && (is_open(files,request->arg0) < -1)) { //No existe en ppal
 						
 						//inicio anillo
 						intern_request -> op = CRE;
-						intern_request -> origin = 0;
+						intern_request -> external = 0;
 						intern_request -> main_worker = request -> main_worker;
 						intern_request -> arg0 = request -> arg0;
 						intern_request -> arg1 = "0";
@@ -309,7 +313,7 @@ void *worker(void *w_info){
 							mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
 							
 					}
-					else if(!(request->origin)) { //Interno
+					else if(!(request->external)) { //Interno
 						
 						if(request->main_worker == wid){ //volví
 							if(strcmp(request->arg1, "-1") == 0){ //existe
@@ -353,10 +357,10 @@ void *worker(void *w_info){
 						}
 						else{	//todavía no volví
 							
-							if(archivo_abierto(files,request->arg0) > -2){ //existe
+							if(is_open(files,request->arg0) > -2){ //existe
 								
 								intern_request -> op = CRE;
-								intern_request -> origin = 0;
+								intern_request -> external = 0;
 								intern_request -> main_worker = request -> main_worker;
 								intern_request -> arg0 = request -> arg0;
 								intern_request -> arg1 = "-1";
@@ -380,20 +384,22 @@ void *worker(void *w_info){
 					
 					}
 					
-				}
+                }
+                break;
+                    
 				case OPN:{	//Falta revisar bien pero creo que estaría
 				
 				int *code = malloc(sizeof(int));
 				code = NULL;
 				
-				if(request->origin){
+				if(request->external){
 						
-						int status = abrir_archivo(request->client_id, files, request->arg0, code);
+						int status = open_file(request->client_id, files, request->arg0, code);
 					
 						if(status == -2){
 							
 							intern_request -> op = request -> op;
-							intern_request -> origin = 0;
+							intern_request -> external = 0;
 							intern_request -> main_worker = request -> main_worker;
 							intern_request -> arg0 = request -> arg0;
 							intern_request -> arg1 = "-2";
@@ -454,7 +460,7 @@ void *worker(void *w_info){
 						}
 						else{
 							
-							int status = abrir_archivo(request->client_id, files, request->arg0, code);
+							int status = open_file(request->client_id, files, request->arg0, code);
 							
 							if(status == -2){
 								
@@ -467,7 +473,7 @@ void *worker(void *w_info){
 							else{
 								
 								intern_request -> op = request -> op;
-								intern_request -> origin = 0;
+								intern_request -> external = 0;
 								intern_request -> main_worker = request -> main_worker;
 								intern_request -> arg0 = request -> arg0;
 								if(status == -1)
@@ -487,11 +493,13 @@ void *worker(void *w_info){
 					free(code);
 					
 				}
+                
+                break;
 				case WRT:{ //Falta analizar un caso
 					//
 					int found = 0;
 					
-					if((request->origin) || (!(request->origin)&&(request->main_worker != wid))){ //Pedido externo o interno distinto del ppal
+					if((request->external) || (!(request->external)&&(request->main_worker != wid))){ //Pedido externo o interno distinto del ppal
 					
 						while(files != NULL){
 						
@@ -500,7 +508,7 @@ void *worker(void *w_info){
 								found = 1;
 								
 								if(files->open != wid){	
-									if(request->origin){
+									if(request->external){
 										ans->err = F_CLOSED;
 										ans->answer = "El archivo no está abierto para éste worker.";
 										SEND_ANS();
@@ -508,7 +516,7 @@ void *worker(void *w_info){
 									}
 									else{
 										intern_request -> op = request->op;
-										intern_request -> origin = 0;
+										intern_request -> external = 0;
 										intern_request -> main_worker = request -> main_worker;
 										intern_request -> arg0 = NULL;
 										intern_request -> arg1 = NULL;
@@ -547,7 +555,7 @@ void *worker(void *w_info){
 						if((N_WORKERS > 1) && (found == 0)){
 							
 							intern_request -> op = request->op;
-							intern_request -> origin = 0;
+							intern_request -> external = 0;
 							intern_request -> main_worker = request -> main_worker;
 							intern_request -> arg0 = request -> arg0;
 							intern_request -> arg1 = request -> arg1;
@@ -581,11 +589,13 @@ void *worker(void *w_info){
 					}	
 					//
 				}
+                break;    
+                    
 				case REA:{
 					
 					int found = 0;
 					
-					if((request->origin) || (!(request->origin)&&(request->main_worker != wid))){ //Pedido externo o interno distinto del ppal
+					if((request->external) || (!(request->external)&&(request->main_worker != wid))){ //Pedido externo o interno distinto del ppal
 					
 						while(files != NULL){
 						
@@ -594,7 +604,7 @@ void *worker(void *w_info){
 								found = 1;
 								
 								if(files->open != wid){	
-									if(request->origin){
+									if(request->external){
 										ans->err = F_CLOSED;
 										ans->answer = "El archivo no está abierto para éste worker.";
 										SEND_ANS();
@@ -602,7 +612,7 @@ void *worker(void *w_info){
 									}
 									else{
 										intern_request -> op = request->op;
-										intern_request -> origin = 0;
+										intern_request -> external = 0;
 										intern_request -> main_worker = request -> main_worker;
 										intern_request -> arg0 = NULL;
 										intern_request -> arg1 = NULL;
@@ -652,7 +662,7 @@ void *worker(void *w_info){
 						if((N_WORKERS > 1) && (found == 0)){
 							
 							intern_request -> op = request->op;
-							intern_request -> origin = 0;
+							intern_request -> external = 0;
 							intern_request -> main_worker = request -> main_worker;
 							intern_request -> arg0 = request -> arg0;
 							intern_request -> arg1 = request -> arg1;
@@ -685,16 +695,19 @@ void *worker(void *w_info){
 							SEND_ANS();
 					}	
 				}
+                
+                break;    
+                    
 				case CLO:{	//DONE
 				
-					if(request->origin){
+					if(request->external){
 						
-						int status = cerrar_archivo(files, atoi(request -> arg0));
+						int status = close_file(files, atoi(request -> arg0));
 					
 						if(status == -2){
 							
 							intern_request -> op = request -> op;
-							intern_request -> origin = 0;
+							intern_request -> external = 0;
 							intern_request -> main_worker = request -> main_worker;
 							intern_request -> arg0 = request -> arg0;
 							intern_request -> arg1 = "-2";
@@ -737,7 +750,7 @@ void *worker(void *w_info){
 						}
 						else{
 							
-							int status = cerrar_archivo(files, atoi(request->arg0));
+							int status = close_file(files, atoi(request->arg0));
 							
 							if(status == -2){
 								
@@ -750,7 +763,7 @@ void *worker(void *w_info){
 							else{
 								
 								intern_request -> op = request -> op;
-								intern_request -> origin = 0;
+								intern_request -> external = 0;
 								intern_request -> main_worker = request -> main_worker;
 								intern_request -> arg0 = request -> arg0;
 								if(status == -1)
@@ -768,12 +781,15 @@ void *worker(void *w_info){
 					}					
 				
 				}
+                
+                break;    
+                    
 				case BYE:{
 //                    			int s;
-//                    			if(request->origin){
+//                    			if(request->external){
 //                        			if(N_WORKERS > 1){
 //                		    			intern_request->op = BYE;
-//                					intern_request->origin = 0;
+//                					intern_request->external = 0;
 //                					intern_request->main_worker = request -> main_worker;
 //                		    			intern_request->arg0 = NULL;
 //                		    			intern_request->arg1 = NULL;
@@ -788,7 +804,7 @@ void *worker(void *w_info){
 //                        			}
 //                        			else{
 //                            				while (files != NULL){
-//                                				s = cerrar_archivo(files,atoi(files->name));
+//                                				s = close_file(files,atoi(files->name));
 //                                				files = files -> next;
 //                            				}
 //                            				ans -> err = NONE;
@@ -800,7 +816,7 @@ void *worker(void *w_info){
 //						if (wid == request->main_worker){
 //    
 //                        				while (files != NULL){
-//                            					s = cerrar_archivo(files,atoi(files->name));
+//                            					s = close_file(files,atoi(files->name));
 //                            					files = files -> next;
 //                        				}
 //                        				ans -> err = NONE;
@@ -810,7 +826,7 @@ void *worker(void *w_info){
 //	
 //      				        else{
 //          						intern_request->op = BYE;
-//          						intern_request->origin = 0;
+//          						intern_request->external = 0;
 //            						intern_request->main_worker = request->main_worker;
 //            						intern_request->arg0 = NULL;
 //            						intern_request->arg1 = NULL;
@@ -826,6 +842,7 @@ void *worker(void *w_info){
 //                   				}	
 //                			}					
 				}
+                break;
 			}
 			
 		}
@@ -836,6 +853,9 @@ void *worker(void *w_info){
     return 0;
 
 }
+
+
+
 
 int init_workers(){
     
