@@ -29,7 +29,8 @@ void *handle_client(void *s){
     int client_id      = session->client_id;
 	mqd_t worker_queue = session->worker_queue;
 	mqd_t client_queue = *(session->client_queue);
-
+	Reply *ans; //malloc en Worker
+	
     // Client handle loop
     while(1){
         
@@ -62,12 +63,13 @@ void *handle_client(void *s){
                     
                 if(SEND_REQ(req) != 0) ERROR("DFS_SERVER: Error sending request to worker.\n");
                 
-                //if((readed = RECV_ANS())) ERROR("DFS_SERVER: Error receiving answer from worker.\n");
+                if((readed = RECV_ANS()) == -1) ERROR("DFS_SERVER: Error receiving answer from worker.\n");
                 
                 // Sample data
-                Reply *ans = malloc(sizeof(Reply));
-                ans->err = NONE;
-                ans->answer = "Todo bien!";
+                //ans->err = NONE;
+                //ans->answer = "Todo bien!";
+                
+				ans = (Reply *)buffer_in;
                 
                 switch(ans->err){
                     // If no errors, print ok + extra data depending on command
@@ -90,9 +92,8 @@ void *handle_client(void *s){
                 // If operation was BYE, logout after receive workers OK
                 if(req->op == BYE) identified = !identified;
         
-                // Free everything
-                free(ans);
-                free(req);
+                
+          
             }
             
             
@@ -108,6 +109,10 @@ void *handle_client(void *s){
     if(mq_close(client_queue) == -1) ERROR("DFS_SERVER: Error closing worker message queue.\n");
     free(s);
     
+      // Free everything
+     free(ans);
+     free(req);
+     
     return NULL;
 }
 
