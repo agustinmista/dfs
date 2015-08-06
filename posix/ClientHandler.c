@@ -123,6 +123,7 @@ Request *parseRequest(Session *s, char *cmd){
     req->arg1 = NULL;
     req->arg2 = NULL;
     req->external = 1;
+    req->main_worker = s->worker_id;
     req->client_id = s->client_id;
     req->client_queue = s->client_queue;
     
