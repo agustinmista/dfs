@@ -3,7 +3,6 @@
 #endif
 #define _GNU_SOURCE  //elimina el warning al usar asprintf
 
-#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
