@@ -13,8 +13,8 @@ int tmp_fd;
 //Ver comprobaciones de malloc y otras..
 
 void print_request(int wid, Request *r){    
-    printf("DFS_SERVER_REQ: [worker: %d] [id: %d] [op: %d] [arg0:'%s'] [arg1:'%s\'] [arg2:'%s']\n",
-           wid, r->client_id, r->op, r->arg0, r->arg1, r->arg2);
+    printf("DFS_SERVER_REQ: [worker: %d] [id: %d] [op: %d] [external: %d] [arg0:'%s'] [arg1:'%s\'] [arg2:'%s']\n",
+           wid, r->client_id, r->op, r->external, r->arg0, r->arg1, r->arg2);
 }
 
 void fill_reply(Reply *ans, Error werror, char *wreply){
@@ -102,6 +102,19 @@ int open_file(int cID, File *files, char *nombre, int *obs){	//0 si se pudo abri
 	}
 	obs = NULL; //?
 	return -2;	
+}
+
+int close_all_files(File *files){
+	
+	while(files != NULL){
+		if((files->open) > 0){
+			files->open = -1;
+			files->cursor = 0;
+		}	
+		files = files->next;
+	}
+	
+	return 0;
 }
 
 int delete_file(File *files, char *nombre){
@@ -257,8 +270,22 @@ void *worker(void *w_info){
 				SEND_ANS();
 				break;
 			case BYE:
-				fill_reply(ans, NONE, NULL);
-				SEND_ANS();
+				if(request->main_worker == wid){
+					if(!(request->external) || N_WORKERS == 1){
+						close_all_files(files);
+						fill_reply(ans, NONE, NULL);
+						SEND_ANS();
+					}
+					else{
+						intern_request = request;
+						intern_request->external = 0;
+						send_next_worker(wid, wqueue, intern_request);
+					}
+				}
+				else{
+					close_all_files(files);
+					send_next_worker(wid, wqueue, request);
+				}
 				break;
 		}
     
@@ -303,7 +330,7 @@ void *worker(void *w_info){
 							intern_request->op = LSD;
 							intern_request->external = 0;
 							intern_request->main_worker = request->main_worker;
-							intern_request->arg0 = strcat(request->arg1, list_files(files));
+							intern_request->arg0 = strcat(request->arg0, list_files(files));
 							intern_request->arg1 = NULL;
 							intern_request->arg2 = NULL;
 							intern_request->client_id = request->client_id;
