@@ -12,6 +12,21 @@ int tmp_fd;
 
 //Ver comprobaciones de malloc y otras..
 
+int str2int (char *cad){
+
+    int num = 0;
+    int tam  = strlen(cad);
+    int digito;
+    int i;
+
+    for (i = tam ; i > 0; --i) {
+        digito = (int) (cad[i - 1] - 48);
+        num = num + (digito * pow(10.0,tam - i));        
+    }
+
+    return num;
+}
+
 void print_request(int wid, Request *r){    
     printf("DFS_SERVER_REQ: [worker: %d] [id: %d] [op: %d] [external: %d] [arg0:'%s'] [arg1:'%s\'] [arg2:'%s']\n",
            wid, r->client_id, r->op, r->external, r->arg0, r->arg1, r->arg2);
