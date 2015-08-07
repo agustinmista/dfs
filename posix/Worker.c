@@ -24,6 +24,18 @@ void fill_reply(Reply *ans, Error werror, char *wreply){
 	
 }
 
+void fill_request (Request *intern_request,Operation op,int ext, int mw, char *arg0,char *arg1,char *arg2,int cID,mqd_t *cl_queue){
+    intern_request->op = op;
+   	intern_request->external = ext;
+    intern_request->main_worker = mw;
+    intern_request->arg0 = arg0;
+    intern_request->arg1 = arg1;
+    intern_request->arg2 = arg2;
+    intern_request->client_id = cID;
+    intern_request->client_queue = cl_queue;            
+}
+
+
 File *create_file(){
 
 	File *aux = malloc(sizeof(File));
