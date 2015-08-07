@@ -1,4 +1,4 @@
-CFLAGS = -lpthread -lrt -Wall -g -std=c99
+CFLAGS = -lpthread -lrt -lm -Wall -g -std=c99
 
 all: 
 	gcc -o dfs_server *.c $(CFLAGS)
