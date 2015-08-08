@@ -1,7 +1,7 @@
 #include "Common.h"
 #include "Worker.h"
-#define SEND_ANS() mq_send(*(request->client_queue), (char *) ans, sizeof(*ans), 1)
-#define SEND_REQ_MAIN(wrequest); mq_send(wqueue[request->main_worker], (char *) wrequest, sizeof(Request), 0);
+#define SEND_ANS()              mq_send(*(request->client_queue), (char *) ans, sizeof(*ans), 1)
+#define SEND_REQ_MAIN(wrequest) mq_send(wqueue[request->main_worker], (char *) wrequest, sizeof(Request), 0);
 
 
 struct mq_attr attr;
@@ -18,69 +18,60 @@ void print_request(int wid, Request *r){
 }
 
 void fill_reply(Reply *ans, Error werror, char *wreply){
-	
 	ans->err = werror;
 	ans->answer = wreply;
-	
 }
 
-void fill_request (Request *intern_request,Operation op,int ext, int mw, char *arg0,char *arg1,char *arg2,int cID,mqd_t *cl_queue){
-    intern_request->op = op;
-   	intern_request->external = ext;
-    intern_request->main_worker = mw;
-    intern_request->arg0 = arg0;
-    intern_request->arg1 = arg1;
-    intern_request->arg2 = arg2;
-    intern_request->client_id = cID;
-    intern_request->client_queue = cl_queue;            
+void fill_request (Request *int_req, Operation op, int external, int main_worker,
+                   char *arg0, char *arg1, char *arg2, int client_id, mqd_t *client_queue){
+    int_req->op = op;
+   	int_req->external = external;
+    int_req->main_worker = main_worker;
+    int_req->arg0 = arg0;
+    int_req->arg1 = arg1;
+    int_req->arg2 = arg2;
+    int_req->client_id = client_id;
+    int_req->client_queue = client_queue;            
 }
 
 
 File *create_file(){
-
-	File *aux = malloc(sizeof(File));
-	if(aux == NULL)
-		return NULL;
-		
-	aux->name = malloc(32);
-	if(aux->name == NULL)
-		free(aux);
-		
-	aux->content = malloc(2000);
-	if(aux->content == NULL){
-		free(aux->name);
-		free(aux);
+    File *newFile;
+    
+	if (!(newFile = malloc(sizeof(File))))
+        return NULL;
+    
+	if (!(newFile->name = malloc(F_NAME_SIZE))){
+        free(newFile);
+        return NULL; //si no retornamos null acá, como hicimos free(newFile)
+                     //entonces newFile->content no sería válido
+    }
+    
+	if(!(newFile->content = malloc(F_CONTENT_SIZE))){
+		free(newFile->name);
+		free(newFile);
+        return NULL;    // este return NULL es redundante pero ayuda a que se entienda que se retorna NULL
 	}
-	return aux;
+
+	return newFile;
 }
 
-int send_next_worker(int id, mqd_t *queue, Request *message){
-	
-	if(id == N_WORKERS - 1)
-		return mq_send(queue[0], (char *)message, sizeof(*message), 0);
-	else
-		return mq_send(queue[id+1], (char *)message, sizeof(*message), 0);
-
+int send_next_worker(int id, mqd_t *queue, Request *req){
+    return mq_send(queue[ (id+1)%N_WORKERS ], (char *)req, sizeof(*req), 0);
 }
 
 int is_open(File *files, char *nombre){ //-2 no existe, -1 existe cerrado, id existe abierto por id
-
-	while(files != NULL){
-		if(strcmp(files->name, nombre) == 0){
-			if((files->open) < 0)
-				return -1;
-			else
-				return (files->open);
-		}
+	while(files){
+		if(!strcmp(files->name, nombre)) 
+            return (files->open);           // no hace falta ver que sea <0, si está cerrado ya es -1 y devolvemos eso
 		files = files->next;
 	}
 	return -2;
 }
 
-int close_file(File *files, int descriptor){ //0 si se pudo cerrar, -1 si ya estaba cerrado, -2 si no existe
-	
-	while(files != NULL){
-		if(files->fd == descriptor){
+int close_file(File *files, int fd){ //0 si se pudo cerrar, -1 si ya estaba cerrado, -2 si no existe
+	while(files){
+		if(files->fd == fd){
 			if((files->open) < 0)
 				return -1;
 			else{
@@ -88,24 +79,22 @@ int close_file(File *files, int descriptor){ //0 si se pudo cerrar, -1 si ya est
 				files->cursor = 0;
 				return 0;
 			}
-			
 		files = files->next;
 		}
 	}
 	return -2;
-	
 }
 
-int open_file(int cID, File *files, char *nombre, int *obs){	//0 si se pudo abrir ->obs = fd, -1 si ya estaba abierto ->obs=cID, -2 si no existe
-	
-	while(files != NULL){
-		if(files->name == nombre){
-			if((files->open) < 0){
-				files->open = cID;
+//0 si se pudo abrir ->obs = fd, -1 si ya estaba abierto ->obs=client_id, -2 si no existe
+int open_file(int client_id, File *files, char *nombre, int *obs){
+
+	while(files){
+	   if(!strcmp(files->name, nombre)) {      // para comparar nombres siempre con strcmp!
+			if(!(files->open)){
+				files->open = client_id;
 				obs = &(files->fd);
 				return 0;
-			}
-			else{
+			} else {
 				obs = &(files->open);
 				return -1;
 			}
@@ -116,35 +105,31 @@ int open_file(int cID, File *files, char *nombre, int *obs){	//0 si se pudo abri
 	return -2;	
 }
 
-int close_all_files(File *files){
+void close_all_files(File *files){
 	
-	while(files != NULL){
-		if((files->open) > 0){
+	while(files){
+		if(files->open){
 			files->open = -1;
 			files->cursor = 0;
 		}	
 		files = files->next;
 	}
-	
-	return 0;
 }
 
 int delete_file(File *files, char *nombre){
 	
 	File *prev = NULL;
 	
-	while(files != NULL){
-		if(strcmp(files->name, nombre) == 0){
-			if((files->open) < 0){
+	while(files){
+		if(!strcmp(files->name, nombre)){
+			if(!(files->open)){
 				prev->next = files->next;
 				free(files);
 				return 0;	//OK, borrado
-			}
-			else
-				return -1;	//Abierto
-		}
-		else
-			files = files->next;
+			} else 
+                return -1;	//Abierto
+		} else 
+            files = files->next;
 	}
 	return -2; //No existe
 	
@@ -152,17 +137,15 @@ int delete_file(File *files, char *nombre){
 
 char *list_files(File *files){
 	
-	if(files == NULL)
-		return " ";
-	else{
-		char *lista = "";
-		while(files != NULL){
-			strcat(lista, files->name);
-			strcat(lista, " ");
-			files = files->next;
-		}
-		return lista;
-	}
+	if(!files) return " ";
+    
+    char *lista = "";                   // el else no hace falta porque ya retornamos si entró en el if
+    while(files){
+        strcat(lista, files->name);
+        strcat(lista, " ");
+        files = files->next;
+    }
+    return lista;
 }
 
 void *worker(void *w_info){
@@ -174,8 +157,8 @@ void *worker(void *w_info){
     int readed;
     
     Request *request;
-    Request *intern_request = malloc(sizeof(*intern_request));
-	Reply *ans = (Reply *)malloc(sizeof(Reply));
+    Request *intern_request = malloc(sizeof(Request));
+	Reply *ans = malloc(sizeof(Reply));
 	
     // Parse worker args
     int wid = ((Worker_Info *)w_info)->id;
@@ -192,11 +175,11 @@ void *worker(void *w_info){
 		switch(request->op){
 			
 			case LSD:
-				fill_reply(ans, NONE, NULL);
+				fill_reply(ans, NOT_IMP, NULL);
 				SEND_ANS();
 				break;
 			case DEL:
-				fill_reply(ans, NONE, NULL);
+				fill_reply(ans, NOT_IMP, NULL);
 				SEND_ANS();
 				break;
 			case CRE:
@@ -225,39 +208,34 @@ void *worker(void *w_info){
 								
 							fill_reply(ans, NONE, NULL);	
 							
-						}
-						else
-							fill_reply(ans, F_EXIST, NULL);
+						} else fill_reply(ans, F_EXIST, NULL);
 							
 						SEND_ANS();
-					}
-					else if(!(request->external) && (strcmp(request->arg1, "-1") == 0)){	
+                        
+					} else if(!(request->external) && (strcmp(request->arg1, "-1") == 0)){
 						fill_reply(ans, F_EXIST, NULL);
 						SEND_ANS();
-					}
-					else{
+                        
+					} else {
 							
 						if(is_open(files, request->arg0) == -2){
 							intern_request = request;
 							intern_request->external = 0;
 							intern_request->arg1 = "0";
 							send_next_worker(wid, wqueue, intern_request);
-						}
-						else{
+						} else {
 							fill_reply(ans, F_EXIST, NULL);
 							SEND_ANS();
 						}
 					}
-				}
-				else{
+				} else {
 					
 					if(is_open(files, request->arg0) == -2){
 						intern_request=request;
 						intern_request->external = 0;
 						intern_request->arg1 = "0";
 						send_next_worker(wid, wqueue, intern_request);
-					}
-					else{
+					} else {
 						intern_request=request;
 						intern_request->external = 0;
 						intern_request->arg1 = "-1";
@@ -265,36 +243,39 @@ void *worker(void *w_info){
 					}	
 				}			
                 break;
+                
 			case OPN:
-				fill_reply(ans, NONE, NULL);
+				fill_reply(ans, NOT_IMP, NULL);
 				SEND_ANS();
 				break;
+                
 			case WRT:
-				fill_reply(ans, NONE, NULL);
+				fill_reply(ans, NOT_IMP, NULL);
 				SEND_ANS();
 				break;
+                
 			case REA:
-				fill_reply(ans, NONE, NULL);
+				fill_reply(ans, NOT_IMP, NULL);
 				SEND_ANS();
 				break;
+                
 			case CLO:
-				fill_reply(ans, NONE, NULL);
+				fill_reply(ans, NOT_IMP, NULL);
 				SEND_ANS();
 				break;
+                
 			case BYE:
 				if(request->main_worker == wid){
 					if(!(request->external) || N_WORKERS == 1){
 						close_all_files(files);
 						fill_reply(ans, NONE, NULL);
 						SEND_ANS();
-					}
-					else{
+					} else {
 						intern_request = request;
 						intern_request->external = 0;
 						send_next_worker(wid, wqueue, intern_request);
 					}
-				}
-				else{
+				} else {
 					close_all_files(files);
 					send_next_worker(wid, wqueue, request);
 				}

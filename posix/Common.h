@@ -21,6 +21,8 @@
 #define N_WORKERS 5
 #define MAX_MESSAGES 10
 #define MSG_SIZE 1024
+#define F_NAME_SIZE 32
+#define F_CONTENT_SIZE 4096
 
 typedef enum _Operation {
     LSD,
@@ -40,7 +42,8 @@ typedef enum _Error {
     F_OPEN,
     F_EXIST,
     F_CLOSED,
-    F_NOTEXIST      
+    F_NOTEXIST,
+    NOT_IMP
 } Error;
 
 typedef struct _Session {

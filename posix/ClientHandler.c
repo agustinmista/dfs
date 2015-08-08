@@ -81,12 +81,13 @@ void *handle_client(void *s){
                         break;
                         
                     // Otherwise, print error
-                    case BAD_FD:     SEND2CLIENT("dfs> ERROR: BAD FD\n");             break;
-                    case BAD_ARG:    SEND2CLIENT("dfs> ERROR: BAD ARG\n");            break;
-                    case F_OPEN:     SEND2CLIENT("dfs> ERROR: FILE ALREADY OPEN\n");  break;                    
-                    case F_CLOSED:   SEND2CLIENT("dfs> ERROR: FILE IS CLOSED\n");     break;
-                    case F_EXIST:    SEND2CLIENT("dfs> ERROR: FILE ALREADY EXIST\n"); break;                    
-                    case F_NOTEXIST: SEND2CLIENT("dfs> ERROR: FILE NOT EXIST\n");     break;
+                    case BAD_FD:     SEND2CLIENT("dfs> ERROR: BAD FD\n");                  break;
+                    case BAD_ARG:    SEND2CLIENT("dfs> ERROR: BAD ARG\n");                 break;
+                    case F_OPEN:     SEND2CLIENT("dfs> ERROR: FILE ALREADY OPEN\n");       break;                    
+                    case F_CLOSED:   SEND2CLIENT("dfs> ERROR: FILE IS CLOSED\n");          break;
+                    case F_EXIST:    SEND2CLIENT("dfs> ERROR: FILE ALREADY EXIST\n");      break;                    
+                    case F_NOTEXIST: SEND2CLIENT("dfs> ERROR: FILE NOT EXIST\n");          break;
+                    case NOT_IMP:    SEND2CLIENT("dfs> ERROR: COMMAND NOT IMPLEMENTED\n"); break;
                 }
                 
                 // If operation was BYE, logout after receive workers OK
