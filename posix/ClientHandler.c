@@ -159,7 +159,7 @@ Request *parseRequest(Session *s, char *cmd){
         
         return req;
         
-    } else if (!strncmp(opcode, "CRE", 3)) {
+    } else if (!strncmp(opcode, "OPN", 3)) {
         req->op = OPN;
         
         if(!(req->arg0 = strtok_r(NULL, " ", &saveptr))) return NULL;
