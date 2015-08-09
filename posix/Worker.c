@@ -70,16 +70,16 @@ int is_open(File *files, char *nombre){ //-2 no existe, -1 existe cerrado, id ex
 
 int close_file(File *files, int fd){ //0 si se pudo cerrar, -1 si ya estaba cerrado, -2 si no existe
 	while(files){
-		if(files->fd == fd){
-			if((files->open) < 0)
+		if((files->fd) == fd){
+			if((files->open) == -1)
 				return -1;
 			else{
 				files->open = -1;
 				files->cursor = 0;
 				return 0;
 			}
-		files = files->next;
 		}
+		files = files->next;
 	}
 	return -2;
 }
@@ -315,10 +315,59 @@ void *worker(void *w_info){
 				break;
                 
 			case CLO:
-				fill_reply(ans, NOT_IMP, NULL);
-				SEND_ANS();
-				break;
-                
+				if(!(request->external) && ((request->main_worker) == wid)){
+					if(strcmp(request->arg1, "-1") == 0)
+						fill_reply(ans, F_CLOSED, NULL);
+					else if (strcmp(request->arg1, "-2") == 0)
+						fill_reply(ans, F_NOTEXIST, NULL);
+					else
+						fill_reply(ans, NONE, NULL);
+					
+					SEND_ANS();	
+				} else {
+					
+					int status = close_file(files, atoi(request->arg0));
+					
+					//BORRAR
+					printf("Comprobación CLO: %d.\n", status);
+					//
+					
+					if(request->external){
+						if(status == -2){
+							if(N_WORKERS > 1){
+								intern_request = request;
+								intern_request->external = 0;
+								intern_request->arg1 = "-2";
+								send_next_worker(wid, wqueue, intern_request);
+							} else {
+								fill_reply(ans, F_NOTEXIST, NULL);
+								SEND_ANS();
+							}
+						} else {
+							if(status == -1)
+								fill_reply(ans, F_CLOSED, NULL);
+							else{
+								fill_reply(ans, NONE, NULL);
+							}
+							SEND_ANS();
+						}
+					} else {
+						intern_request = request;
+						intern_request->external = 0;
+						if(status == -2){
+							intern_request->arg1 = "-2";
+							send_next_worker(wid, wqueue, intern_request);
+						} else {
+							if(status == -1)
+								intern_request->arg1 = "-1";
+							else{
+								intern_request->arg1 = "0";
+							}
+							SEND_REQ_MAIN(intern_request);
+						}
+					}
+				}
+				break;    
 			case BYE:
 				if(request->main_worker == wid){
 					if(!(request->external) || N_WORKERS == 1){
@@ -695,93 +744,7 @@ void *worker(void *w_info){
 				}
                 
                 break;    
-                    
-				case CLO:{	//DONE
-				
-					if(request->external){
-						
-						int status = close_file(files, atoi(request -> arg0));
-					
-						if(status == -2){
-							
-							intern_request -> op = request -> op;
-							intern_request -> external = 0;
-							intern_request -> main_worker = request -> main_worker;
-							intern_request -> arg0 = request -> arg0;
-							intern_request -> arg1 = "-2";
-							intern_request -> arg2 = NULL;
-							intern_request -> client_id = request -> client_id;
-							intern_request -> client_queue = request -> client_queue;
-								
-							if(wid == N_WORKERS - 1)
-								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
-							else
-								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);						
-						}
-						else{
-							
-							ans->err = NONE;
-							ans->answer = NULL;
-							SEND_ANS();
-
-						}
-					}
-					else{
-						
-						if(request -> main_worker == wid){
-							
-							if(strcmp(request -> arg1, "-2") == 0){
-							
-								ans -> err = F_NOTEXIST;
-								ans -> answer = NULL;
-								
-								SEND_ANS();								
-							}
-							else{
-								
-								ans -> err = NONE;
-								ans -> answer = NULL;
-					
-								SEND_ANS();
-								
-							}
-						}
-						else{
-							
-							int status = close_file(files, atoi(request->arg0));
-							
-							if(status == -2){
-								
-								if(wid == N_WORKERS - 1)
-									mq_send(wqueue[0], (char *) &request, sizeof(request), 0);
-								else
-									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), 0);						
-
-							}
-							else{
-								
-								intern_request -> op = request -> op;
-								intern_request -> external = 0;
-								intern_request -> main_worker = request -> main_worker;
-								intern_request -> arg0 = request -> arg0;
-								if(status == -1)
-									intern_request -> arg1 = "-1";
-								else
-									intern_request -> arg1 = "0";
-									
-								intern_request -> arg2 = NULL;
-								intern_request -> client_id = request -> client_id;
-								intern_request -> client_queue = request -> client_queue;
-
-								mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), 0);
-							}
-						}
-					}					
-				
-				}
-                
-                break;    
-                    
+                        
 				
 			}*/
 			
