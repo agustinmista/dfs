@@ -19,7 +19,8 @@
 #define ERROR(s)    exit((perror(s), -1))
 
 #define N_WORKERS 5
-#define MAX_MESSAGES 10
+#define MAX_MESSAGES 10 //era para saber cuanto espacio alocar, ver si se hace efectivo en CRE, etc...
+#define MAX_FILES 10
 #define MSG_SIZE 1024
 #define F_NAME_SIZE 32
 #define F_CONTENT_SIZE 4096

@@ -101,7 +101,7 @@ int open_file(int client_id, File *files, char *nombre){ //Ok
 	return -2;	
 }
 
-void close_all_files(File *files){
+void close_all_files(File *files){ //OK
 	
 	while(files){
 		if(files->open){
@@ -112,7 +112,7 @@ void close_all_files(File *files){
 	}
 }
 
-int delete_file(File *files, char *nombre){
+int delete_file(File *files, char *nombre){ //OK
 	
 	File *prev = NULL;
 	
@@ -131,15 +131,20 @@ int delete_file(File *files, char *nombre){
 	
 }
 
-char *list_files(File *files){
+char *list_files(File *files){ //OK
 	
-	if(!files) return " ";
+	if(!files) return "";
     
-    char *lista = "";                   // el else no hace falta porque ya retornamos si entró en el if
+    char *lista = malloc(sizeof(char)*(F_NAME_SIZE+1)*MAX_FILES);
+    
+    if(files){
+		strcpy(lista, files->name);
+		files=files->next;
+	}
     while(files){
+		strcat(lista, " ");
         strcat(lista, files->name);
-        strcat(lista, " ");
-        files = files->next;
+        files=files->next;
     }
     return lista;
 }
@@ -173,8 +178,32 @@ void *worker(void *w_info){
 		switch(request->op){
 			
 			case LSD:
-				fill_reply(ans, NOT_IMP, NULL);
-				SEND_ANS();
+				if(request->external){ //hacer free en handler creo
+					char *tmp = (char *)malloc(sizeof(char)*(F_NAME_SIZE+2)*MAX_FILES*N_WORKERS);
+					tmp = list_files(files);
+					if(N_WORKERS > 1){
+						intern_request = request;
+						intern_request->external = 0;
+						intern_request->arg0 = tmp;
+						send_next_worker(wid, wqueue, intern_request);
+					} else {
+						fill_reply(ans, NONE, tmp);
+						SEND_ANS();
+					}
+				} else if(!(request->external) && ((request->main_worker) != wid)){
+					char *tmp = list_files(files);
+					intern_request = request;
+					intern_request->external = 0;
+					strcpy (intern_request->arg0, request->arg0);
+					if(strlen(tmp)>0){
+						strcat(intern_request->arg0, " ");
+						strcat(intern_request->arg0, tmp);
+					}
+					send_next_worker(wid, wqueue, intern_request);
+				} else {
+					fill_reply(ans, NONE, request->arg0);
+					SEND_ANS();
+				}
 				break;
 			case DEL:
 				fill_reply(ans, NOT_IMP, NULL);
@@ -182,11 +211,9 @@ void *worker(void *w_info){
 				break;
 			case CRE:
 				if((request->main_worker) == wid){
-						
-					if((!(request->external) && (strcmp(request->arg1, "0") == 0)) || (N_WORKERS == 1)){
-							
+					if((!(request->external) && (strcmp(request->arg1, "0") == 0)) || (N_WORKERS == 1)){	
 						if(is_open(files, request->arg0) == -2){
-							
+	
 							pthread_mutex_lock(&fd_mutex);
 								int tmp_fd = file_descriptor;
 								file_descriptor++;
@@ -302,8 +329,7 @@ void *worker(void *w_info){
 						}
 					}
 				}
-				break;
-                
+				break;  
 			case WRT:
 				fill_reply(ans, NOT_IMP, NULL);
 				SEND_ANS();
@@ -393,53 +419,6 @@ void *worker(void *w_info){
         files = files_init;
 
 			switch(request->op){
-				
-				case LSD:	//DONE
-					
-					if(request->external){
-						if(N_WORKERS > 1){
-							intern_request->op = LSD;
-							intern_request->external = 0;
-							intern_request->main_worker = request -> main_worker;
-							intern_request->arg0 = NULL;
-							intern_request->arg1 = NULL;
-							intern_request->arg2 = NULL;
-							intern_request->client_id = request->client_id;
-							intern_request->client_queue = request->client_queue;
-						
-							if(wid  == N_WORKERS - 1)
-								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
-							else
-								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
-						} else {
-							ans->err=NONE;
-							ans->answer = list_files(files);
-							SEND_ANS();
-						}
-                        
-					} else {
-						
-						if(wid == request->main_worker){ //volvi
-							ans->err = NONE;
-							ans->answer = strcat(request->arg0, list_files(files));
-							SEND_ANS();
-						} else {
-							intern_request->op = LSD;
-							intern_request->external = 0;
-							intern_request->main_worker = request->main_worker;
-							intern_request->arg0 = strcat(request->arg0, list_files(files));
-							intern_request->arg1 = NULL;
-							intern_request->arg2 = NULL;
-							intern_request->client_id = request->client_id;
-							intern_request->client_queue = request->client_queue;
-						
-							if(wid  == N_WORKERS - 1)
-								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
-							else
-								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
-						}
-					}
-					break;
                     
 				case DEL:{	//DONE
 					if(request->external){
@@ -754,8 +733,6 @@ void *worker(void *w_info){
     return 0;
 
 }
-
-
 
 
 int init_workers(){
