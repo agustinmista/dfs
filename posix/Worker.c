@@ -112,30 +112,49 @@ void close_all_files(File *files){ //OK
 	}
 }
 
-int delete_file(File *files, char *nombre){ //OK
+int delete_file(File *files, File *fst_file, char *nombre){ //Todavía tengo problemas cuando 
 	
 	File *prev = NULL;
 	
-	while(files){
+	if(files){
 		if(!strcmp(files->name, nombre)){
-			if(!(files->open)){
-				prev->next = files->next;
-				free(files);
-				return 0;	//OK, borrado
-			} else 
-                return -1;	//Abierto
-		} else 
-            files = files->next;
+			if((files->open) == -1){
+				prev = files;
+				files = files->next;
+                free(prev->name);
+                free(prev->content);
+				free(prev);
+				fst_file = files;
+				return 0; //ok, cerrado
+			} else { 
+				return -1;	//Abierto
+			}
+		}
+		prev = files;
+		files = files->next;
+		while(prev){
+			if(!strcmp(files->name, nombre)){
+				if((files->open) == -1){
+					prev->next = files->next;
+                    free(files->name);
+                    free(files->content);
+					free(files);
+					return 0;	//OK, borrado
+				} else 
+					return -1;	//Abierto
+			}
+			prev = files;
+			files = files->next;
+		}
 	}
 	return -2; //No existe
-	
 }
 
 char *list_files(File *files){ //OK
 	
 	if(!files) return "";
     
-    char *lista = malloc(sizeof(char)*(F_NAME_SIZE+1)*MAX_FILES);
+    char *lista = calloc((F_NAME_SIZE+1)*MAX_FILES, sizeof(char));
     
     if(files){
 		strcpy(lista, files->name);
@@ -179,8 +198,11 @@ void *worker(void *w_info){
 			
 			case LSD:
 				if(request->external){ //hacer free en handler creo
-					char *tmp = (char *)malloc(sizeof(char)*(F_NAME_SIZE+2)*MAX_FILES*N_WORKERS);
-					tmp = list_files(files);
+					char *tmp = (char *)calloc((F_NAME_SIZE+2)*MAX_FILES*N_WORKERS, sizeof(char));
+					char *tmp2 = list_files(files);
+                    if(strlen(tmp2)>0)
+                        strcpy(tmp, tmp2);
+                        
 					if(N_WORKERS > 1){
 						intern_request = request;
 						intern_request->external = 0;
@@ -205,10 +227,81 @@ void *worker(void *w_info){
 					SEND_ANS();
 				}
 				break;
-			case DEL:
-				fill_reply(ans, NOT_IMP, NULL);
-				SEND_ANS();
-				break;
+            
+            case DEL:
+				if(!(request->external) && ((request->main_worker) == wid)){
+					if(strcmp(request->arg1, "-1") == 0)
+						fill_reply(ans, F_OPEN, NULL);
+					else if (strcmp(request->arg1, "-2") == 0)
+						fill_reply(ans, F_NOTEXIST, NULL);
+					else{
+						//BORRAR
+						printf("DFS_SERVER: File deleted: [name: %s]\n", request->arg0);
+						//
+						fill_reply(ans, NONE, NULL);
+					}
+					SEND_ANS();	
+				} else {
+
+                    int status = -2;
+                    File *prev = NULL;
+                                       
+                    while(files){
+                        if(!strcmp(files->name, request->arg0)){
+                            if(files->open == -1){
+                                if(!prev)
+                                    files_init = files->next;
+                                else
+                                    prev->next = files->next;
+                                free(files);
+                                status = 0;
+                                break;
+                            } else
+                                status = -1;
+                        }
+                        prev = files;
+                        files = files->next;
+                    }
+                    
+					if(request->external){
+						if(status == -2){
+							if(N_WORKERS > 1){
+								intern_request = request;
+								intern_request->external = 0;
+								intern_request->arg1 = "-2";
+								send_next_worker(wid, wqueue, intern_request);
+							} else {
+								fill_reply(ans, F_NOTEXIST, NULL);
+								SEND_ANS();
+							}
+						} else {
+							if(status == -1)
+								fill_reply(ans, F_OPEN, NULL);
+							else{
+                                //BORRAR
+                                printf("DFS_SERVER: File deleted: [name: %s]\n", request->arg0);
+                                //
+								fill_reply(ans, NONE, NULL);
+                            }
+							SEND_ANS();
+						}
+					} else {
+						intern_request = request;
+						intern_request->external = 0;
+						if(status == -2){
+							intern_request->arg1 = "-2";
+							send_next_worker(wid, wqueue, intern_request);
+						} else {
+							if(status == -1)
+								intern_request->arg1 = "-1";
+							else
+								intern_request->arg1 = "0";
+							
+							SEND_REQ_MAIN(intern_request);
+						}
+					}
+				}
+				break; 
                 
 			case CRE:
 				if((request->main_worker) == wid){
