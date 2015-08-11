@@ -41,7 +41,7 @@ void *init_dispatcher(void *s){
         if (pthread_create(&new_client, NULL, handle_client, newSession) != 0)
                 ERROR("DFS_SERVER: Error creating pthread.\n"); 
 
-        printf("DFS_SERVER: New client!\t[id: %d]\t[worker: %d]\n",
+        printf("DFS_SERVER: New client! [id: %d] [worker: %d]\n",
                newSession->client_id, newSession->worker_id);
         
     }

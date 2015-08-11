@@ -209,6 +209,7 @@ void *worker(void *w_info){
 				fill_reply(ans, NOT_IMP, NULL);
 				SEND_ANS();
 				break;
+                
 			case CRE:
 				if((request->main_worker) == wid){
 					if((!(request->external) && (strcmp(request->arg1, "0") == 0)) || (N_WORKERS == 1)){	
@@ -232,7 +233,7 @@ void *worker(void *w_info){
 							files_init = new;
 							
 							//BORRAR
-							printf("New file created: %s, FD is %d.\n", new->name, new->fd);
+							printf("DFS_SERVER: New file created: [name: %s] [fd: %d]\n", new->name, new->fd);
 							//	
 							
 							fill_reply(ans, NONE, NULL);	
@@ -271,7 +272,8 @@ void *worker(void *w_info){
 						SEND_REQ_MAIN(intern_request);
 					}	
 				}			
-                break;   
+                break; 
+                
 			case OPN:
 				if(!(request->external) && ((request->main_worker) == wid)){
 					if(strcmp(request->arg1, "-1") == 0)
@@ -306,7 +308,7 @@ void *worker(void *w_info){
 								fill_reply(ans, F_OPEN, NULL);
 							else{
 								char *aux;
-								asprintf(&aux, "%d", tmp);
+								asprintf(&aux, "FD %d", tmp);
 								fill_reply(ans, NONE, aux);
 							}
 							SEND_ANS();
@@ -329,7 +331,8 @@ void *worker(void *w_info){
 						}
 					}
 				}
-				break;  
+				break; 
+                
 			case WRT:
 				fill_reply(ans, NOT_IMP, NULL);
 				SEND_ANS();
@@ -393,7 +396,8 @@ void *worker(void *w_info){
 						}
 					}
 				}
-				break;    
+				break;
+                
 			case BYE:
 				if(request->main_worker == wid){
 					if(!(request->external) || N_WORKERS == 1){
