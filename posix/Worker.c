@@ -158,7 +158,7 @@ char *list_files(File *files){ //OK
     
     for(i=0; tmp; tmp = tmp->next) i++;
     
-    char *lista = calloc((F_NAME_SIZE+12)*i, sizeof(char));     // +range of ints
+    char *lista = calloc((F_NAME_SIZE+1)*i, sizeof(char));
 
     while(files){
         strcat(lista, files->name);
