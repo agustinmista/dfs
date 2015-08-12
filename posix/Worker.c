@@ -151,18 +151,18 @@ int delete_file(File *files, File *fst_file, char *nombre){ //Todavía tengo pro
 }
 
 char *list_files(File *files){ //OK
-	
 	if(!files) return "";
     
-    char *lista = calloc((F_NAME_SIZE+1)*MAX_FILES, sizeof(char));
+    int i;
+    File *tmp = files;
     
-    if(files){
-		strcpy(lista, files->name);
-		files=files->next;
-	}
+    for(i=0; tmp; tmp = tmp->next) i++;
+    
+    char *lista = calloc((F_NAME_SIZE+12)*i, sizeof(char));     // +range of ints
+
     while(files){
-		strcat(lista, " ");
         strcat(lista, files->name);
+		if(files->next) strcat(lista, " ");
         files=files->next;
     }
     return lista;

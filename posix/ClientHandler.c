@@ -110,9 +110,9 @@ void *handle_client(void *s){
     if(mq_close(client_queue) == -1) ERROR("DFS_SERVER: Error closing worker message queue.\n");
     free(s);
     
-      // Free everything
-     free(ans);
-     free(req);
+    // Free everything
+    free(ans);
+    free(req);
      
     return NULL;
 }

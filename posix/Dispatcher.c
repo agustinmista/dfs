@@ -10,6 +10,8 @@ int getWorkerId(){
 
 void *init_dispatcher(void *s){
     
+    srand(time(NULL));
+    
     int socket = *((int *) s);
     int conn_id;
     
