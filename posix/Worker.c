@@ -404,11 +404,11 @@ void *worker(void *w_info){
 			case WRT:
             
 				if(!(request->external) && ((request->main_worker) == wid)){
-					if(strcmp(request->arg1, "-1") == 0)
+					if(strcmp(request->arg0, "-1") == 0)
 						fill_reply(ans, F_OPEN, NULL);
-					else if (strcmp(request->arg1, "-2") == 0)
+					else if (strcmp(request->arg0, "-2") == 0)
 						fill_reply(ans, F_NOTEXIST, NULL);
-                    else if (strcmp(request->arg1, "-3") == 0)
+                    else if (strcmp(request->arg0, "-3") == 0)
                         fill_reply(ans, F_NOTSPACE, NULL);
 					else
 						fill_reply(ans, NONE, request->arg1);
@@ -463,11 +463,11 @@ void *worker(void *w_info){
                         } else {
 							if(status == -1) //Aca hay que cambiar mucho el request.. por eso es mejor hacerlo con fill_request
 								fill_request(intern_request, WRT, 0, request->main_worker, "-1", NULL, NULL, request->client_id, request->client_queue);
-							else if(status == -3)
+                            else if(status == -3)
                                 fill_request(intern_request, WRT, 0, request->main_worker, "-3", NULL, NULL, request->client_id, request->client_queue);
                             else
 								fill_request(intern_request, WRT, 0, request->main_worker, "0", NULL, NULL, request->client_id, request->client_queue);
-
+                                
 							SEND_REQ_MAIN(intern_request);
 						}
 					}
