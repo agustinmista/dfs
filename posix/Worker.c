@@ -427,6 +427,7 @@ void *worker(void *w_info){
                                     if(sz > 0)
                                         strcat(files->content, " ");
                                     strcat(files->content, request->arg2);
+                                    files->size = strlen(files->content);
                                     printf("DFS_SERVER: Content updated: [name: %s] [content: %s]\n", files->name, files->content);
                                     status = 0;
                                 }else
@@ -480,9 +481,10 @@ void *worker(void *w_info){
 				break; 
                 
 			case REA:
-				fill_reply(ans, NOT_IMP, NULL);
-				SEND_ANS();
-				break;
+                
+                fill_reply(ans, NOT_IMP, NULL);
+                SEND_ANS();
+                break;
                 
 			case CLO:
 				if(!(request->external) && ((request->main_worker) == wid)){
