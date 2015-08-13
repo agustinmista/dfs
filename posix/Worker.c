@@ -407,7 +407,7 @@ void *worker(void *w_info){
 					if(strcmp(request->arg0, "-1") == 0)
 						fill_reply(ans, F_OPEN, NULL);
 					else if (strcmp(request->arg0, "-2") == 0)
-						fill_reply(ans, F_NOTEXIST, NULL);
+						fill_reply(ans, BAD_FD, NULL);
                     else if (strcmp(request->arg0, "-3") == 0)
                         fill_reply(ans, F_NOTSPACE, NULL);
 					else
@@ -431,9 +431,10 @@ void *worker(void *w_info){
                                     status = 0;
                                 }else
                                     status = -3;
-                                break;
                             }
+                            break;
                         }
+                        files=files->next;
                     }
 					if(request->external){
 						if(status == -2){
@@ -442,7 +443,7 @@ void *worker(void *w_info){
                                 intern_request->external = 0;
 								send_next_worker(wid, wqueue, intern_request);
 							} else {
-								fill_reply(ans, F_NOTEXIST, NULL);
+								fill_reply(ans, BAD_FD, NULL);
 								SEND_ANS();
 							}
 						} else {
@@ -457,8 +458,12 @@ void *worker(void *w_info){
 						}
 					} else {
 						if(status == -2){
-                            intern_request = request;
-                            intern_request->external = 0;
+                            if((wid == request->main_worker-1)||((wid == N_WORKERS-1) &&(request->main_worker == 0)))
+                                fill_request(intern_request, WRT, 0, request->main_worker, "-2", NULL, NULL, request->client_id, request->client_queue);
+                            else {
+                                intern_request = request;
+                                intern_request->external = 0;
+                            }
                             send_next_worker(wid, wqueue, intern_request);
                         } else {
 							if(status == -1) //Aca hay que cambiar mucho el request.. por eso es mejor hacerlo con fill_request
@@ -484,7 +489,7 @@ void *worker(void *w_info){
 					if(strcmp(request->arg1, "-1") == 0)
 						fill_reply(ans, F_CLOSED, NULL);
 					else if (strcmp(request->arg1, "-2") == 0)
-						fill_reply(ans, F_NOTEXIST, NULL);
+						fill_reply(ans, BAD_FD, NULL);
 					else
 						fill_reply(ans, NONE, NULL);
 					
@@ -505,7 +510,7 @@ void *worker(void *w_info){
 								intern_request->arg1 = "-2";
 								send_next_worker(wid, wqueue, intern_request);
 							} else {
-								fill_reply(ans, F_NOTEXIST, NULL);
+								fill_reply(ans, BAD_FD, NULL);
 								SEND_ANS();
 							}
 						} else {
