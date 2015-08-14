@@ -5,6 +5,7 @@
 #define SEND_ANS()          mq_send(*(request->client_queue), (char *) ans, sizeof(*ans), 1)
 #define SEND_REQ_MAIN(req)  mq_send(wqueue[request->main_worker], (char *) req, sizeof(Request), 1);
 
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
 struct mq_attr attr;
 
@@ -179,11 +180,9 @@ void *worker(void *w_info){
 		switch(request->op){
 			
 			case LSD:
-				if(request->external){ //hacer free en handler creo
-					char *tmp = (char *)calloc((F_NAME_SIZE+2)*MAX_FILES*N_WORKERS, sizeof(char));
-					char *tmp2 = list_files(files);
-                    if(strlen(tmp2)>0)
-                        strcpy(tmp, tmp2);
+				
+                if(request->external){ //hacer free
+                    char *tmp = list_files(files);
                         
 					if(N_WORKERS > 1){
 						intern_request = request;
@@ -198,10 +197,12 @@ void *worker(void *w_info){
 					char *tmp = list_files(files);
 					intern_request = request;
 					intern_request->external = 0;
-					strcpy (intern_request->arg0, request->arg0);
-					if(strlen(tmp)>0){
-						strcat(intern_request->arg0, " ");
-						strcat(intern_request->arg0, tmp);
+					if(strlen(tmp)>0 && (strlen(request->arg0)>0)){
+                        char *aux;
+                        asprintf(&aux, "%s %s", request->arg0, tmp);
+                        intern_request->arg0 = aux;
+                    } else if(strlen(tmp)>0) {
+                        intern_request->arg0 = tmp;
 					}
 					send_next_worker(wid, wqueue, intern_request);
 				} else {
@@ -484,9 +485,87 @@ void *worker(void *w_info){
                 
 			case REA:
                 
-                fill_reply(ans, NOT_IMP, NULL);
-                SEND_ANS();
-                break;
+                if(!(request->external) && ((request->main_worker) == wid)){
+					if(strcmp(request->arg0, "-1") == 0)
+						fill_reply(ans, F_OPEN, NULL);
+					else if (strcmp(request->arg0, "-2") == 0)
+						fill_reply(ans, BAD_FD, NULL);
+                    else if (strcmp(request->arg0, "-3") == 0)
+                        fill_reply(ans, NONE, "");
+					else
+						fill_reply(ans, NONE, request->arg1);
+					
+					SEND_ANS();	
+				} else {
+					
+                    int status = -2;
+                    char *ret;
+                    
+                    while(files){
+                        if(files->fd == atoi(request->arg0)){ 
+                            status = -1;
+                            if(files->open == request->client_id){
+                                status = -3;
+                                int sz1 = atoi(request->arg1);
+                                if((sz1 > 0) && (files->cursor < files->size)){
+                                    int sz2 = MIN(sz1, (files->size-1) - files->cursor);
+                                    ret=calloc(sz2+1, sizeof(char));
+                                    int i=0;
+                                    while((sz1 > 0) && (files->cursor < files->size)){
+                                        ret[i] = (files->content)[files->cursor];
+                                        i++;
+                                        files->cursor++;
+                                        sz1--;
+                                    }
+                                    status = 0;
+                                }
+                            }
+                            break;
+                        }
+                        files=files->next;
+                    }
+					if(request->external){
+						if(status == -2){
+							if(N_WORKERS > 1){
+                                intern_request = request;
+                                intern_request->external = 0;
+								send_next_worker(wid, wqueue, intern_request);
+							} else {
+								fill_reply(ans, BAD_FD, NULL);
+								SEND_ANS();
+							}
+						} else {
+							if(status == -1)
+								fill_reply(ans, F_OPEN, NULL);
+                            else if(status == -3)
+                                fill_reply(ans, NONE, "");
+							else
+                                fill_reply(ans, NONE, ret);
+							
+							SEND_ANS();
+						}
+					} else {
+						if(status == -2){
+                            if((wid == request->main_worker-1)||((wid == N_WORKERS-1) &&(request->main_worker == 0)))
+                                fill_request(intern_request, WRT, 0, request->main_worker, "-2", NULL, NULL, request->client_id, request->client_queue);
+                            else {
+                                intern_request = request;
+                                intern_request->external = 0;
+                            }
+                            send_next_worker(wid, wqueue, intern_request);
+                        } else {
+							if(status == -1) //Aca hay que cambiar mucho el request.. por eso es mejor hacerlo con fill_request
+								fill_request(intern_request, WRT, 0, request->main_worker, "-1", NULL, NULL, request->client_id, request->client_queue);
+                            else if(status == -3)
+                                fill_request(intern_request, WRT, 0, request->main_worker, "-3", NULL, NULL, request->client_id, request->client_queue);
+                            else
+								fill_request(intern_request, WRT, 0, request->main_worker, "0", ret, NULL, request->client_id, request->client_queue);
+                                
+							SEND_REQ_MAIN(intern_request);
+						}
+					}
+				}
+				break; 
                 
 			case CLO:
 				if(!(request->external) && ((request->main_worker) == wid)){
@@ -560,125 +639,7 @@ void *worker(void *w_info){
 				}
 				break;
 		}
-    
-	}
-    
-    /*while(0){
-
-        files = files_init;
-
-			switch(request->op){
-				                    
-				case REA:{
-					
-					int found = 0;
-					
-					if((request->external) || (!(request->external)&&(request->main_worker != wid))){ //Pedido externo o interno distinto del ppal
-					
-						while(files != NULL){
-						
-							if(files->fd == atoi(request->arg0)){
-								
-								found = 1;
-								
-								if(files->open != wid){	
-									if(request->external){
-										ans->err = F_CLOSED;
-										ans->answer = "El archivo no está abierto para éste worker.";
-										SEND_ANS();
-										break;
-									}
-									else{
-										intern_request -> op = request->op;
-										intern_request -> external = 0;
-										intern_request -> main_worker = request -> main_worker;
-										intern_request -> arg0 = NULL;
-										intern_request -> arg1 = NULL;
-										intern_request -> arg2 = "-1";
-										intern_request -> client_id = request -> client_id;
-										intern_request -> client_queue = request -> client_queue;
-										
-										mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), 0);
-										break;
-									}
-								}
-								else{
-								
-									if((request->arg1) <= 0){
-											ans->err = NONE;
-											ans->answer = NULL;
-									}
-									else{
-										
-										char *aux = calloc(atoi(request->arg1) + 1, 1);
-										int n = 0;
-										
-										while((files->cursor < files->size) && (n < atoi(request->arg1))){
-											aux[n] = (files->content)[files->cursor];
-											n++;
-											(files->cursor)++;
-										}
-										
-										ans->err = NONE;
-										ans->answer = aux; //ver en donde hacer el free
-										
-											 
-									//el handler deber responder además haciendo un sizeof de answer
-									//mover cursor a donde corresponda
-									
-									}
-									SEND_ANS();
-									break;
-								}
-							
-							}
-							else
-								files = files->next;
-							
-						}
-						
-						if((N_WORKERS > 1) && (found == 0)){
-							
-							intern_request -> op = request->op;
-							intern_request -> external = 0;
-							intern_request -> main_worker = request -> main_worker;
-							intern_request -> arg0 = request -> arg0;
-							intern_request -> arg1 = request -> arg1;
-							intern_request -> arg2 = "0";
-							intern_request -> client_id = request -> client_id;
-							intern_request -> client_queue = request -> client_queue;
-							
-							if(wid == N_WORKERS - 1)
-								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
-							else
-								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
-						
-						}
-						
-					}
-					else{	//volví
-							
-							if(strcmp(request->arg2, "0") == 0){ //Lectura satisfactoria
-								ans->err = NONE;
-								ans->answer = request->arg1;
-							}
-							else if(strcmp(request->arg2, "-1") == 0){ //Archivo cerrado 
-								ans->err = F_CLOSED;
-								ans->answer = "El archivo no está abierto para éste worker.";
-							}
-							else{
-								ans->err = BAD_FD;	//Les parece o eso era mas para el handler?
-								ans->answer = NULL;
-							}
-							SEND_ANS();
-					}	
-				}
-                
-                break;    
-                        
-				
-			}*/
-			
+        }
 	}
 						
     mq_close(wqueue[wid]);
