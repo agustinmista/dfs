@@ -31,7 +31,8 @@ int newFD(FDPool *pool){
     return -1;
 }
 
-void freeFD(FDPool *pool, int fd){
-    CLEAR(pool->arr, fd);                             
+int freeFD(FDPool *pool, int fd){
+    CLEAR(pool->arr, fd);
+    return -1;
 }
 

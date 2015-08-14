@@ -21,4 +21,4 @@ void printFDPool(FDPool *pool);
 
 int newFD(FDPool *pool);
 
-void freeFD(FDPool *pool, int fd);
+int freeFD(FDPool *pool, int fd);
