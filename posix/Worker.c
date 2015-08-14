@@ -394,7 +394,7 @@ void *worker(void *w_info){
 								intern_request->arg1 = "-1";
 							else{
 								char *aux;
-								asprintf(&aux, "%d", tmp);
+								asprintf(&aux, "FD %d", tmp);
 								intern_request->arg1 = aux;
 							}
 							SEND_REQ_MAIN(intern_request);
@@ -694,13 +694,8 @@ int init_workers(){
         // Instance the worker message queue
         char *worker_name;
         asprintf(&worker_name, "/w%d", i);
-        
-        attr.mq_flags = 0;  
-        attr.mq_maxmsg = MAX_MESSAGES;  
-        attr.mq_msgsize = MSG_SIZE;  
-        attr.mq_curmsgs = 0;
-        
-        if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0644, &attr)) == (mqd_t) -1)
+
+        if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0644, NULL)) == (mqd_t) -1)
             ERROR("\nDFS_SERVER: Error opening message queue for workers\n");
         
         Worker_Info *newWorker = malloc(sizeof (Worker_Info));

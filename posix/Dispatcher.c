@@ -35,7 +35,7 @@ void *init_dispatcher(void *s){
         asprintf(&client_name, "/c%d", conn_id);
         
         mqd_t *client_queue = (mqd_t*) newSession->client_queue;
-        if((*client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0644, &attr)) == (mqd_t)-1)
+        if((*client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0644, NULL)) == (mqd_t)-1)
             ERROR("DFS_SERVER: Error opening message queue for the new client.\n");
 
         

@@ -5,9 +5,6 @@
 #define SEND_REQ(request)       mq_send(worker_queue, (char *) request, sizeof(Request), 1)
 #define RECV_ANS()              mq_receive(client_queue, buffer_in, MSG_SIZE, NULL)
 
-//printf(%.*s\n", size, buffer);  imprime los primeros size caracteres de buffer
-
-
 int is_valid(char *s){
     if(strlen(s) == 1 && *s == '.') return 0;
     for(int i=0; i<strlen(s); i++) 
@@ -23,13 +20,14 @@ void *handle_client(void *s){
     char buffer_out[MSG_SIZE];
 
     Request *req = NULL;
+    Reply *ans;
     
     // Parse session args
     Session *session = (Session *) s;
     int client_id      = session->client_id;
 	mqd_t worker_queue = session->worker_queue;
 	mqd_t client_queue = *(session->client_queue);
-	Reply *ans; //malloc en Worker
+	
 	
     // Client handle loop
     while(1){
@@ -63,12 +61,9 @@ void *handle_client(void *s){
                     
                 if(SEND_REQ(req) != 0) ERROR("DFS_SERVER: Error sending request to worker.\n");
                 
+                // Workers doing their job...
+                
                 if((readed = RECV_ANS()) == -1) ERROR("DFS_SERVER: Error receiving answer from worker.\n");
-                
-                // Sample data
-                //ans->err = NONE;
-                //ans->answer = "Todo bien!";
-                
 				ans = (Reply *)buffer_in;
                 
                 switch(ans->err){
@@ -90,14 +85,10 @@ void *handle_client(void *s){
                     case F_EXIST:    SEND2CLIENT("dfs> ERROR: FILE ALREADY EXIST\n");      break;                    
                     case F_NOTEXIST: SEND2CLIENT("dfs> ERROR: FILE NOT EXIST\n");          break;
                     case F_NOTSPACE: SEND2CLIENT("dfs> ERROR: FILE: NOT ENOUGH SPACE\n");  break;
+                    case F_TOOMANY:  SEND2CLIENT("dfs> ERROR: TOO MANY OPEN FILES\n");     break;
                     case NOT_IMP:    SEND2CLIENT("dfs> ERROR: COMMAND NOT IMPLEMENTED\n"); break;
                 }
-                
-                // If operation was BYE, logout after receive workers OK
-                
-        
-                
-          
+
             }
             
             
@@ -108,15 +99,14 @@ void *handle_client(void *s){
             SEND2CLIENT("dfs> ERROR NOT IDENTIFIED\n");
     }
     
-    // Close everything
+    // Close message queue
     if(mq_close(client_queue) == -1) ERROR("DFS_SERVER: Error closing client message queue.\n");
-    if(mq_close(client_queue) == -1) ERROR("DFS_SERVER: Error closing worker message queue.\n");
+
+    // Free everything
+    if(req) free(req);
+    if(ans) free(ans);
     free(s);
     
-    // Free everything
-    free(ans);
-    free(req);
-     
     return NULL;
 }
 

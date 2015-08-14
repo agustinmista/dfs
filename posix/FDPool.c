@@ -2,6 +2,8 @@
 #include "FDPool.h"
 
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 FDPool *createFDPool(int size){
     FDPool *newPool = malloc(sizeof(FDPool));
     newPool->arr = malloc((size/8)+1);
@@ -24,7 +26,10 @@ void printFDPool(FDPool *pool){
 int newFD(FDPool *pool){
     for(int i=0; i<pool->size; i++){
         if(!IS_SET(pool->arr, i)){
+            // Protect the array asignation with the mutex
+            pthread_mutex_lock(&mutex);
             SET(pool->arr, i);
+            pthread_mutex_unlock(&mutex);
             return i;
         }
     }

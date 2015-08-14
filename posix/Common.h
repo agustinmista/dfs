@@ -1,7 +1,7 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
 #endif
-#define _GNU_SOURCE  //elimina el warning al usar asprintf
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,13 +18,13 @@
 
 #define ERROR(s)    exit((perror(s), -1))
 
-#define N_WORKERS 5
-#define MAX_MESSAGES 10 //era para saber cuanto espacio alocar, ver si se hace efectivo en CRE, etc...
-#define MAX_FILES 10
-#define MAX_OPEN_FILES 100
-#define MSG_SIZE 1024
-#define F_NAME_SIZE 32
-#define F_CONTENT_SIZE 4096
+#define N_WORKERS       5
+#define MAX_MESSAGES    10
+#define MAX_FILES       10
+#define MAX_OPEN_FILES  100
+#define MSG_SIZE        1024
+#define F_NAME_SIZE     32
+#define F_CONTENT_SIZE  4096
 
 typedef enum _Operation {
     LSD,
@@ -46,6 +46,7 @@ typedef enum _Error {
     F_CLOSED,
     F_NOTEXIST,
     F_NOTSPACE,
+    F_TOOMANY,
     NOT_IMP
 } Error;
 
