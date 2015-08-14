@@ -1,38 +1,20 @@
 #include "Common.h"
 #include "Worker.h"
-#include "FDPool.h"
+
 
 #define SEND_ANS()          mq_send(*(request->client_queue), (char *) ans, sizeof(*ans), 1)
 #define SEND_REQ_MAIN(req)  mq_send(wqueue[request->main_worker], (char *) req, sizeof(Request), 1);
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
-struct mq_attr attr;
+#define DEBUG_REQUEST 1
 
-int file_descriptor = INIT_FD;
+struct mq_attr attr;
 pthread_mutex_t fd_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-//MODIFICAR//
-int new_fd(){
-    
-    pthread_mutex_lock(&fd_mutex);
-		int tmp_fd = file_descriptor;
-        file_descriptor++;
-    pthread_mutex_unlock(&fd_mutex);
-    
-    return tmp_fd;
-}
-
-int free_fd(){
-    
-    return -1;
-
-}
-
-//MODIFICAR//
 
 void print_request(int wid, Request *r){    //Ok
-    printf("DFS_SERVER_REQ: [worker: %d] [id: %d] [op: %d] [external: %d] [arg0:'%s'] [arg1:'%s\'] [arg2:'%s']\n",
+    printf("DFS_SERVER: New Request: [worker: %d] [id: %d] [op: %d] [external: %d] [arg0:'%s'] [arg1:'%s\'] [arg2:'%s']\n",
            wid, r->client_id, r->op, r->external, r->arg0, r->arg1, r->arg2);
 }
 
@@ -87,7 +69,8 @@ int is_open(File *files, char *nombre){ //-2 no existe, -1 existe cerrado, id ex
 	return -2;
 }
 
-int close_file(File *files, int fd){ //0 si se pudo cerrar, -1 si ya estaba cerrado, -2 si no existe
+//0 si se pudo cerrar, -1 si ya estaba cerrado, -2 si no existe
+int close_file(File *files, FDPool *fd_pool, int fd){ 
 	while(files){
 		if((files->fd) == fd){
 			if((files->open) == -1)
@@ -95,7 +78,7 @@ int close_file(File *files, int fd){ //0 si se pudo cerrar, -1 si ya estaba cerr
 			else{
 				files->open = -1;
 				files->cursor = 0;
-                files->fd = free_fd();
+                files->fd = freeFD(fd_pool, files->fd);
 				return 0;
 			}
 		}
@@ -104,30 +87,34 @@ int close_file(File *files, int fd){ //0 si se pudo cerrar, -1 si ya estaba cerr
 	return -2;
 }
 
-//fd si se pudo abrir, -1 si ya estaba abierto, -2 si no existe
-int open_file(int client_id, File *files, char *nombre){ //Ok
+//fd si se pudo abrir, -1 si ya estaba abierto, -2 si no existe, -3 si ya no hay lugar en el pool
+int open_file(int client_id, File *files, FDPool *fd_pool, char *nombre){ //Ok
 
 	while(files){
-	   if(!strcmp(files->name, nombre)) {      	// para comparar nombres siempre con strcmp!
-			if((files->open) != -1){ 			//Todo valor distinto de 0 es true
-				return -1;
-			} else {
-				files->open = client_id;
-                files->fd = new_fd();
-				return (files->fd);
-			}
-		}	
+        
+	   if(!strcmp(files->name, nombre)) {
+           
+           if((files->open) != -1)	return -1;   // file already open
+
+           if((files->fd = newFD(fd_pool)) < 0) return -3; // no more space in fd_pool
+
+           files->open = client_id;
+           return (files->fd);          // success
+        }
+        
 		files = files->next;
 	}
-	return -2;	
+    
+	return -2;	// file not found
 }
 
-void close_all_files(File *files){ //OK
+void close_all_files(File *files, FDPool *fd_pool){ //OK
 	
 	while(files){
 		if(files->open){
 			files->open = -1;
 			files->cursor = 0;
+			files->fd = freeFD(fd_pool, files->fd);
 		}	
 		files = files->next;
 	}
@@ -164,8 +151,9 @@ void *worker(void *w_info){
 	Reply *ans = malloc(sizeof(Reply));
 	
     // Parse worker args
-    int wid = ((Worker_Info *)w_info)->id;
-    mqd_t *wqueue = ((Worker_Info *)w_info)->queue;
+    int wid         = ((Worker_Info *)w_info)->id;
+    mqd_t *wqueue   = ((Worker_Info *)w_info)->queue;
+    FDPool *fd_pool = ((Worker_Info *)w_info)->fd_pool;
     free(w_info);	   
     
     // Loop infinito hasta que resolvamos las operaciones, vamos metiendolas adentro 
@@ -173,472 +161,473 @@ void *worker(void *w_info){
     while(1){
         if((readed = mq_receive(wqueue[wid], buffer_in, MSG_SIZE+1, NULL)) >= 0){
             request = (Request *) buffer_in;
-            print_request(wid, request);
-    
-		files = files_init;
-    
-		switch(request->op){
-			
-			case LSD:
-				
-                if(request->external){ //hacer free
-                    char *tmp = list_files(files);
-                        
-					if(N_WORKERS > 1){
-						intern_request = request;
-						intern_request->external = 0;
-						intern_request->arg0 = tmp;
-						send_next_worker(wid, wqueue, intern_request);
-					} else {
-						fill_reply(ans, NONE, tmp);
-						SEND_ANS();
-					}
-				} else if(!(request->external) && ((request->main_worker) != wid)){
-					char *tmp = list_files(files);
-					intern_request = request;
-					intern_request->external = 0;
-					if(strlen(tmp)>0 && (strlen(request->arg0)>0)){
-                        char *aux;
-                        asprintf(&aux, "%s %s", request->arg0, tmp);
-                        intern_request->arg0 = aux;
-                    } else if(strlen(tmp)>0) {
-                        intern_request->arg0 = tmp;
-					}
-					send_next_worker(wid, wqueue, intern_request);
-				} else {
-					fill_reply(ans, NONE, request->arg0);
-					SEND_ANS();
-				}
-				break;
             
-            case DEL:
-				if(!(request->external) && ((request->main_worker) == wid)){
-					if(strcmp(request->arg1, "-1") == 0)
-						fill_reply(ans, F_OPEN, NULL);
-					else if (strcmp(request->arg1, "-2") == 0)
-						fill_reply(ans, F_NOTEXIST, NULL);
-					else{
-						//BORRAR
-						printf("DFS_SERVER: File deleted: [name: %s]\n", request->arg0);
-						//
-						fill_reply(ans, NONE, NULL);
-					}
-					SEND_ANS();	
-				} else {
+            if(DEBUG_REQUEST) print_request(wid, request);
+    
+            files = files_init;
 
-                    int status = -2;
-                    File *prev = NULL;
-                                       
-                    while(files){
-                        if(!strcmp(files->name, request->arg0)){
-                            if(files->open == -1){
-                                if(!prev)
-                                    files_init = files->next;
-                                else
-                                    prev->next = files->next;
-                                free(files);
-                                status = 0;
-                                break;
-                            } else
-                                status = -1;
-                        }
-                        prev = files;
-                        files = files->next;
-                    }
-                    
-					if(request->external){
-						if(status == -2){
-							if(N_WORKERS > 1){
-								intern_request = request;
-								intern_request->external = 0;
-								intern_request->arg1 = "-2";
-								send_next_worker(wid, wqueue, intern_request);
-							} else {
-								fill_reply(ans, F_NOTEXIST, NULL);
-								SEND_ANS();
-							}
-						} else {
-							if(status == -1)
-								fill_reply(ans, F_OPEN, NULL);
-							else{
-                                //BORRAR
-                                printf("DFS_SERVER: File deleted: [name: %s]\n", request->arg0);
-                                //
-								fill_reply(ans, NONE, NULL);
-                            }
-							SEND_ANS();
-						}
-					} else {
-						intern_request = request;
-						intern_request->external = 0;
-						if(status == -2){
-							intern_request->arg1 = "-2";
-							send_next_worker(wid, wqueue, intern_request);
-						} else {
-							if(status == -1)
-								intern_request->arg1 = "-1";
-							else
-								intern_request->arg1 = "0";
-							
-							SEND_REQ_MAIN(intern_request);
-						}
-					}
-				}
-				break; 
-                
-			case CRE:
-				if((request->main_worker) == wid){
-					if((!(request->external) && (strcmp(request->arg1, "0") == 0)) || (N_WORKERS == 1)){	
-						if(is_open(files, request->arg0) == -2){
-				
-							File *new = create_file();
-							if(new){
-								memcpy(new -> name, request->arg0, F_NAME_SIZE-1);
-								new -> fd = -1;
-								new -> open = -1;
-                                (new->content)[0] = '\0'; //Ver--
-								new -> cursor = 0;
-								new -> size = 0; 
-								new -> next = files_init; 
-							}	
-							files_init = new;
-							
-							//BORRAR
-							printf("DFS_SERVER: New file created: [name: %s] [fd: %d]\n", new->name, new->fd);
-							//	
-							
-							fill_reply(ans, NONE, NULL);	
-							
-						} else fill_reply(ans, F_EXIST, NULL);
-							
-						SEND_ANS();
-                        
-					} else if(!(request->external) && (strcmp(request->arg1, "-1") == 0)){
-						fill_reply(ans, F_EXIST, NULL);
-						SEND_ANS();
-                        
-					} else {
-							
-						if(is_open(files, request->arg0) == -2){
-							intern_request = request;
-							intern_request->external = 0;
-							intern_request->arg1 = "0";
-							send_next_worker(wid, wqueue, intern_request);
-						} else {
-							fill_reply(ans, F_EXIST, NULL);
-							SEND_ANS();
-						}
-					}
-				} else {
-					
-					if(is_open(files, request->arg0) == -2){
-						intern_request=request;
-						intern_request->external = 0;
-						intern_request->arg1 = "0";
-						send_next_worker(wid, wqueue, intern_request);
-					} else {
-						intern_request=request;
-						intern_request->external = 0;
-						intern_request->arg1 = "-1";
-						SEND_REQ_MAIN(intern_request);
-					}	
-				}			
-                break; 
-                
-			case OPN:
-				if(!(request->external) && ((request->main_worker) == wid)){
-					if(strcmp(request->arg1, "-1") == 0)
-						fill_reply(ans, F_OPEN, NULL);
-					else if (strcmp(request->arg1, "-2") == 0)
-						fill_reply(ans, F_NOTEXIST, NULL);
-					else
-						fill_reply(ans, NONE, request->arg1);
-					
-					SEND_ANS();	
-				} else {
-					
-					int tmp = open_file(request->client_id, files, request->arg0);
-					
-					//BORRAR
-					printf("Comprobación OPN: %d.\n", tmp);
-					//
-					
-					if(request->external){
-						if(tmp == -2){
-							if(N_WORKERS > 1){
-								intern_request = request;
-								intern_request->external = 0;
-								intern_request->arg1 = "-2";
-								send_next_worker(wid, wqueue, intern_request);
-							} else {
-								fill_reply(ans, F_NOTEXIST, NULL);
-								SEND_ANS();
-							}
-						} else {
-							if(tmp == -1)
-								fill_reply(ans, F_OPEN, NULL);
-							else{
-								char *aux;
-								asprintf(&aux, "FD %d", tmp);
-								fill_reply(ans, NONE, aux);
-							}
-							SEND_ANS();
-						}
-					} else {
-						intern_request = request;
-						intern_request->external = 0;
-						if(tmp == -2){
-							intern_request->arg1 = "-2";
-							send_next_worker(wid, wqueue, intern_request);
-						} else {
-							if(tmp == -1)
-								intern_request->arg1 = "-1";
-							else{
-								char *aux;
-								asprintf(&aux, "FD %d", tmp);
-								intern_request->arg1 = aux;
-							}
-							SEND_REQ_MAIN(intern_request);
-						}
-					}
-				}
-				break; 
-                
-			case WRT:
-            
-				if(!(request->external) && ((request->main_worker) == wid)){
-					if(strcmp(request->arg0, "-1") == 0)
-						fill_reply(ans, F_OPEN, NULL);
-					else if (strcmp(request->arg0, "-2") == 0)
-						fill_reply(ans, BAD_FD, NULL);
-                    else if (strcmp(request->arg0, "-3") == 0)
-                        fill_reply(ans, F_NOTSPACE, NULL);
-					else
-						fill_reply(ans, NONE, request->arg1);
-					
-					SEND_ANS();	
-				} else {
-					
-                    int status = -2;
-                    
-                    while(files){
-                        if(files->fd == atoi(request->arg0)){ 
-                            status = -1;
-                            if(files->open == request->client_id){
-                                int sz = strlen(files->content);
-                                if((sz+atoi(request->arg1)+2)<(F_CONTENT_SIZE)){
-                                    if(sz > 0)
-                                        strcat(files->content, " ");
-                                    strcat(files->content, request->arg2);
-                                    files->size = strlen(files->content);
-                                    printf("DFS_SERVER: Content updated: [name: %s] [content: %s]\n", files->name, files->content);
-                                    status = 0;
-                                }else
-                                    status = -3;
-                            }
-                            break;
-                        }
-                        files=files->next;
-                    }
-					if(request->external){
-						if(status == -2){
-							if(N_WORKERS > 1){
-                                intern_request = request;
-                                intern_request->external = 0;
-								send_next_worker(wid, wqueue, intern_request);
-							} else {
-								fill_reply(ans, BAD_FD, NULL);
-								SEND_ANS();
-							}
-						} else {
-							if(status == -1)
-								fill_reply(ans, F_OPEN, NULL);
-                            else if(status == -3)
-                                fill_reply(ans, F_NOTSPACE, NULL);
-							else
-                                fill_reply(ans, NONE, NULL);
-							
-							SEND_ANS();
-						}
-					} else {
-						if(status == -2){
-                            if((wid == request->main_worker-1)||((wid == N_WORKERS-1) &&(request->main_worker == 0)))
-                                fill_request(intern_request, WRT, 0, request->main_worker, "-2", NULL, NULL, request->client_id, request->client_queue);
-                            else {
-                                intern_request = request;
-                                intern_request->external = 0;
-                            }
+            switch(request->op){
+
+                case LSD:
+
+                    if(request->external){ //hacer free
+                        char *tmp = list_files(files);
+
+                        if(N_WORKERS > 1){
+                            intern_request = request;
+                            intern_request->external = 0;
+                            intern_request->arg0 = tmp;
                             send_next_worker(wid, wqueue, intern_request);
                         } else {
-							if(status == -1) //Aca hay que cambiar mucho el request.. por eso es mejor hacerlo con fill_request
-								fill_request(intern_request, WRT, 0, request->main_worker, "-1", NULL, NULL, request->client_id, request->client_queue);
-                            else if(status == -3)
-                                fill_request(intern_request, WRT, 0, request->main_worker, "-3", NULL, NULL, request->client_id, request->client_queue);
-                            else
-								fill_request(intern_request, WRT, 0, request->main_worker, "0", NULL, NULL, request->client_id, request->client_queue);
-                                
-							SEND_REQ_MAIN(intern_request);
-						}
-					}
-				}
-				break; 
-                
-			case REA:
-                
-                if(!(request->external) && ((request->main_worker) == wid)){
-					if(strcmp(request->arg0, "-1") == 0)
-						fill_reply(ans, F_OPEN, NULL);
-					else if (strcmp(request->arg0, "-2") == 0)
-						fill_reply(ans, BAD_FD, NULL);
-                    else if (strcmp(request->arg0, "-3") == 0)
-                        fill_reply(ans, NONE, "");
-					else
-						fill_reply(ans, NONE, request->arg1);
-					
-					SEND_ANS();	
-				} else {
-					
-                    int status = -2;
-                    char *ret;
-                    
-                    while(files){
-                        if(files->fd == atoi(request->arg0)){ 
-                            status = -1;
-                            if(files->open == request->client_id){
-                                status = -3;
-                                int sz1 = atoi(request->arg1);
-                                if((sz1 > 0) && (files->cursor < files->size)){
-                                    int sz2 = MIN(sz1, (files->size-1) - files->cursor);
-                                    ret=calloc(sz2+1, sizeof(char));
-                                    int i=0;
-                                    while((sz1 > 0) && (files->cursor < files->size)){
-                                        ret[i] = (files->content)[files->cursor];
-                                        i++;
-                                        files->cursor++;
-                                        sz1--;
-                                    }
+                            fill_reply(ans, NONE, tmp);
+                            SEND_ANS();
+                        }
+                    } else if(!(request->external) && ((request->main_worker) != wid)){
+                        char *tmp = list_files(files);
+                        intern_request = request;
+                        intern_request->external = 0;
+                        if(strlen(tmp)>0 && (strlen(request->arg0)>0)){
+                            char *aux;
+                            asprintf(&aux, "%s %s", request->arg0, tmp);
+                            intern_request->arg0 = aux;
+                        } else if(strlen(tmp)>0) {
+                            intern_request->arg0 = tmp;
+                        }
+                        send_next_worker(wid, wqueue, intern_request);
+                    } else {
+                        fill_reply(ans, NONE, request->arg0);
+                        SEND_ANS();
+                    }
+                    break;
+
+                case DEL:
+                    if(!(request->external) && ((request->main_worker) == wid)){
+                        if(strcmp(request->arg1, "-1") == 0)
+                            fill_reply(ans, F_OPEN, NULL);
+                        else if (strcmp(request->arg1, "-2") == 0)
+                            fill_reply(ans, F_NOTEXIST, NULL);
+                        else{
+                            //BORRAR
+                            printf("DFS_SERVER: File deleted: [name: %s]\n", request->arg0);
+                            //
+                            fill_reply(ans, NONE, NULL);
+                        }
+                        SEND_ANS();	
+                    } else {
+
+                        int status = -2;
+                        File *prev = NULL;
+
+                        while(files){
+                            if(!strcmp(files->name, request->arg0)){
+                                if(files->open == -1){
+                                    if(!prev)
+                                        files_init = files->next;
+                                    else
+                                        prev->next = files->next;
+                                    free(files);
                                     status = 0;
+                                    break;
+                                } else
+                                    status = -1;
+                            }
+                            prev = files;
+                            files = files->next;
+                        }
+
+                        if(request->external){
+                            if(status == -2){
+                                if(N_WORKERS > 1){
+                                    intern_request = request;
+                                    intern_request->external = 0;
+                                    intern_request->arg1 = "-2";
+                                    send_next_worker(wid, wqueue, intern_request);
+                                } else {
+                                    fill_reply(ans, F_NOTEXIST, NULL);
+                                    SEND_ANS();
                                 }
+                            } else {
+                                if(status == -1)
+                                    fill_reply(ans, F_OPEN, NULL);
+                                else{
+                                    //BORRAR
+                                    printf("DFS_SERVER: File deleted: [name: %s]\n", request->arg0);
+                                    //
+                                    fill_reply(ans, NONE, NULL);
+                                }
+                                SEND_ANS();
                             }
-                            break;
+                        } else {
+                            intern_request = request;
+                            intern_request->external = 0;
+                            if(status == -2){
+                                intern_request->arg1 = "-2";
+                                send_next_worker(wid, wqueue, intern_request);
+                            } else {
+                                if(status == -1)
+                                    intern_request->arg1 = "-1";
+                                else
+                                    intern_request->arg1 = "0";
+
+                                SEND_REQ_MAIN(intern_request);
+                            }
                         }
-                        files=files->next;
                     }
-					if(request->external){
-						if(status == -2){
-							if(N_WORKERS > 1){
+                    break; 
+
+                case CRE:
+                    if((request->main_worker) == wid){
+                        if((!(request->external) && (strcmp(request->arg1, "0") == 0)) || (N_WORKERS == 1)){	
+                            if(is_open(files, request->arg0) == -2){
+
+                                File *new = create_file();
+                                if(new){
+                                    memcpy(new -> name, request->arg0, F_NAME_SIZE-1);
+                                    new -> fd = -1;
+                                    new -> open = -1;
+                                    (new->content)[0] = '\0'; //Ver--
+                                    new -> cursor = 0;
+                                    new -> size = 0; 
+                                    new -> next = files_init; 
+                                }	
+                                files_init = new;
+
+                                //BORRAR
+                                printf("DFS_SERVER: New file created: [name: %s] [fd: %d]\n", new->name, new->fd);
+                                //	
+
+                                fill_reply(ans, NONE, NULL);	
+
+                            } else fill_reply(ans, F_EXIST, NULL);
+
+                            SEND_ANS();
+
+                        } else if(!(request->external) && (strcmp(request->arg1, "-1") == 0)){
+                            fill_reply(ans, F_EXIST, NULL);
+                            SEND_ANS();
+
+                        } else {
+
+                            if(is_open(files, request->arg0) == -2){
                                 intern_request = request;
                                 intern_request->external = 0;
-								send_next_worker(wid, wqueue, intern_request);
-							} else {
-								fill_reply(ans, BAD_FD, NULL);
-								SEND_ANS();
-							}
-						} else {
-							if(status == -1)
-								fill_reply(ans, F_OPEN, NULL);
-                            else if(status == -3)
-                                fill_reply(ans, NONE, "");
-							else
-                                fill_reply(ans, NONE, ret);
-							
-							SEND_ANS();
-						}
-					} else {
-						if(status == -2){
-                            if((wid == request->main_worker-1)||((wid == N_WORKERS-1) &&(request->main_worker == 0)))
-                                fill_request(intern_request, WRT, 0, request->main_worker, "-2", NULL, NULL, request->client_id, request->client_queue);
-                            else {
-                                intern_request = request;
-                                intern_request->external = 0;
+                                intern_request->arg1 = "0";
+                                send_next_worker(wid, wqueue, intern_request);
+                            } else {
+                                fill_reply(ans, F_EXIST, NULL);
+                                SEND_ANS();
                             }
+                        }
+                    } else {
+
+                        if(is_open(files, request->arg0) == -2){
+                            intern_request=request;
+                            intern_request->external = 0;
+                            intern_request->arg1 = "0";
                             send_next_worker(wid, wqueue, intern_request);
                         } else {
-							if(status == -1) //Aca hay que cambiar mucho el request.. por eso es mejor hacerlo con fill_request
-								fill_request(intern_request, WRT, 0, request->main_worker, "-1", NULL, NULL, request->client_id, request->client_queue);
-                            else if(status == -3)
-                                fill_request(intern_request, WRT, 0, request->main_worker, "-3", NULL, NULL, request->client_id, request->client_queue);
-                            else
-								fill_request(intern_request, WRT, 0, request->main_worker, "0", ret, NULL, request->client_id, request->client_queue);
-                                
-							SEND_REQ_MAIN(intern_request);
-						}
-					}
-				}
-				break; 
-                
-			case CLO:
-				if(!(request->external) && ((request->main_worker) == wid)){
-					if(strcmp(request->arg1, "-1") == 0)
-						fill_reply(ans, F_CLOSED, NULL);
-					else if (strcmp(request->arg1, "-2") == 0)
-						fill_reply(ans, BAD_FD, NULL);
-					else
-						fill_reply(ans, NONE, NULL);
-					
-					SEND_ANS();	
-				} else {
-					
-					int status = close_file(files, atoi(request->arg0));
-					
-					//BORRAR
-					printf("Comprobación CLO: %d.\n", status);
-					//
-					
-					if(request->external){
-						if(status == -2){
-							if(N_WORKERS > 1){
-								intern_request = request;
-								intern_request->external = 0;
-								intern_request->arg1 = "-2";
-								send_next_worker(wid, wqueue, intern_request);
-							} else {
-								fill_reply(ans, BAD_FD, NULL);
-								SEND_ANS();
-							}
-						} else {
-							if(status == -1)
-								fill_reply(ans, F_CLOSED, NULL);
-							else{
-								fill_reply(ans, NONE, NULL);
-							}
-							SEND_ANS();
-						}
-					} else {
-						intern_request = request;
-						intern_request->external = 0;
-						if(status == -2){
-							intern_request->arg1 = "-2";
-							send_next_worker(wid, wqueue, intern_request);
-						} else {
-							if(status == -1)
-								intern_request->arg1 = "-1";
-							else{
-								intern_request->arg1 = "0";
-							}
-							SEND_REQ_MAIN(intern_request);
-						}
-					}
-				}
-				break;
-                
-			case BYE:
-				if(request->main_worker == wid){
-					if(!(request->external) || N_WORKERS == 1){
-						close_all_files(files);
-						fill_reply(ans, NONE, NULL);
-						SEND_ANS();
-					} else {
-						intern_request = request;
-						intern_request->external = 0;
-						send_next_worker(wid, wqueue, intern_request);
-					}
-				} else {
-					close_all_files(files);
-					send_next_worker(wid, wqueue, request);
-				}
-				break;
-		}
+                            intern_request=request;
+                            intern_request->external = 0;
+                            intern_request->arg1 = "-1";
+                            SEND_REQ_MAIN(intern_request);
+                        }	
+                    }			
+                    break; 
+
+                case OPN:
+                    if(!(request->external) && ((request->main_worker) == wid)){
+                        if(strcmp(request->arg1, "-1") == 0)
+                            fill_reply(ans, F_OPEN, NULL);
+                        else if (strcmp(request->arg1, "-2") == 0)
+                            fill_reply(ans, F_NOTEXIST, NULL);
+                        else
+                            fill_reply(ans, NONE, request->arg1);
+
+                        SEND_ANS();	
+                    } else {
+
+                        int tmp = open_file(request->client_id, files, fd_pool, request->arg0);
+
+                        //BORRAR
+                        printf("Comprobación OPN: %d.\n", tmp);
+                        //
+
+                        if(request->external){
+                            if(tmp == -2){
+                                if(N_WORKERS > 1){
+                                    intern_request = request;
+                                    intern_request->external = 0;
+                                    intern_request->arg1 = "-2";
+                                    send_next_worker(wid, wqueue, intern_request);
+                                } else {
+                                    fill_reply(ans, F_NOTEXIST, NULL);
+                                    SEND_ANS();
+                                }
+                            } else {
+                                if(tmp == -1)
+                                    fill_reply(ans, F_OPEN, NULL);
+                                else{
+                                    char *aux;
+                                    asprintf(&aux, "FD %d", tmp);
+                                    fill_reply(ans, NONE, aux);
+                                }
+                                SEND_ANS();
+                            }
+                        } else {
+                            intern_request = request;
+                            intern_request->external = 0;
+                            if(tmp == -2){
+                                intern_request->arg1 = "-2";
+                                send_next_worker(wid, wqueue, intern_request);
+                            } else {
+                                if(tmp == -1)
+                                    intern_request->arg1 = "-1";
+                                else{
+                                    char *aux;
+                                    asprintf(&aux, "FD %d", tmp);
+                                    intern_request->arg1 = aux;
+                                }
+                                SEND_REQ_MAIN(intern_request);
+                            }
+                        }
+                    }
+                    break; 
+
+                case WRT:
+
+                    if(!(request->external) && ((request->main_worker) == wid)){
+                        if(strcmp(request->arg0, "-1") == 0)
+                            fill_reply(ans, F_OPEN, NULL);
+                        else if (strcmp(request->arg0, "-2") == 0)
+                            fill_reply(ans, BAD_FD, NULL);
+                        else if (strcmp(request->arg0, "-3") == 0)
+                            fill_reply(ans, F_NOTSPACE, NULL);
+                        else
+                            fill_reply(ans, NONE, request->arg1);
+
+                        SEND_ANS();	
+                    } else {
+
+                        int status = -2;
+
+                        while(files){
+                            if(files->fd == atoi(request->arg0)){ 
+                                status = -1;
+                                if(files->open == request->client_id){
+                                    int sz = strlen(files->content);
+                                    if((sz+atoi(request->arg1)+2)<(F_CONTENT_SIZE)){
+                                        if(sz > 0)
+                                            strcat(files->content, " ");
+                                        strcat(files->content, request->arg2);
+                                        files->size = strlen(files->content);
+                                        printf("DFS_SERVER: Content updated: [name: %s] [content: %s]\n", files->name, files->content);
+                                        status = 0;
+                                    }else
+                                        status = -3;
+                                }
+                                break;
+                            }
+                            files=files->next;
+                        }
+                        if(request->external){
+                            if(status == -2){
+                                if(N_WORKERS > 1){
+                                    intern_request = request;
+                                    intern_request->external = 0;
+                                    send_next_worker(wid, wqueue, intern_request);
+                                } else {
+                                    fill_reply(ans, BAD_FD, NULL);
+                                    SEND_ANS();
+                                }
+                            } else {
+                                if(status == -1)
+                                    fill_reply(ans, F_OPEN, NULL);
+                                else if(status == -3)
+                                    fill_reply(ans, F_NOTSPACE, NULL);
+                                else
+                                    fill_reply(ans, NONE, NULL);
+
+                                SEND_ANS();
+                            }
+                        } else {
+                            if(status == -2){
+                                if((wid == request->main_worker-1)||((wid == N_WORKERS-1) &&(request->main_worker == 0)))
+                                    fill_request(intern_request, WRT, 0, request->main_worker, "-2", NULL, NULL, request->client_id, request->client_queue);
+                                else {
+                                    intern_request = request;
+                                    intern_request->external = 0;
+                                }
+                                send_next_worker(wid, wqueue, intern_request);
+                            } else {
+                                if(status == -1) //Aca hay que cambiar mucho el request.. por eso es mejor hacerlo con fill_request
+                                    fill_request(intern_request, WRT, 0, request->main_worker, "-1", NULL, NULL, request->client_id, request->client_queue);
+                                else if(status == -3)
+                                    fill_request(intern_request, WRT, 0, request->main_worker, "-3", NULL, NULL, request->client_id, request->client_queue);
+                                else
+                                    fill_request(intern_request, WRT, 0, request->main_worker, "0", NULL, NULL, request->client_id, request->client_queue);
+
+                                SEND_REQ_MAIN(intern_request);
+                            }
+                        }
+                    }
+                    break; 
+
+                case REA:
+
+                    if(!(request->external) && ((request->main_worker) == wid)){
+                        if(strcmp(request->arg0, "-1") == 0)
+                            fill_reply(ans, F_OPEN, NULL);
+                        else if (strcmp(request->arg0, "-2") == 0)
+                            fill_reply(ans, BAD_FD, NULL);
+                        else if (strcmp(request->arg0, "-3") == 0)
+                            fill_reply(ans, NONE, "");
+                        else
+                            fill_reply(ans, NONE, request->arg1);
+
+                        SEND_ANS();	
+                    } else {
+
+                        int status = -2;
+                        char *ret;
+
+                        while(files){
+                            if(files->fd == atoi(request->arg0)){ 
+                                status = -1;
+                                if(files->open == request->client_id){
+                                    status = -3;
+                                    int sz1 = atoi(request->arg1);
+                                    if((sz1 > 0) && (files->cursor < files->size)){
+                                        int sz2 = MIN(sz1, (files->size-1) - files->cursor);
+                                        ret=calloc(sz2+1, sizeof(char));
+                                        int i=0;
+                                        while((sz1 > 0) && (files->cursor < files->size)){
+                                            ret[i] = (files->content)[files->cursor];
+                                            i++;
+                                            files->cursor++;
+                                            sz1--;
+                                        }
+                                        status = 0;
+                                    }
+                                }
+                                break;
+                            }
+                            files=files->next;
+                        }
+                        if(request->external){
+                            if(status == -2){
+                                if(N_WORKERS > 1){
+                                    intern_request = request;
+                                    intern_request->external = 0;
+                                    send_next_worker(wid, wqueue, intern_request);
+                                } else {
+                                    fill_reply(ans, BAD_FD, NULL);
+                                    SEND_ANS();
+                                }
+                            } else {
+                                if(status == -1)
+                                    fill_reply(ans, F_OPEN, NULL);
+                                else if(status == -3)
+                                    fill_reply(ans, NONE, "");
+                                else
+                                    fill_reply(ans, NONE, ret);
+
+                                SEND_ANS();
+                            }
+                        } else {
+                            if(status == -2){
+                                if((wid == request->main_worker-1)||((wid == N_WORKERS-1) &&(request->main_worker == 0)))
+                                    fill_request(intern_request, WRT, 0, request->main_worker, "-2", NULL, NULL, request->client_id, request->client_queue);
+                                else {
+                                    intern_request = request;
+                                    intern_request->external = 0;
+                                }
+                                send_next_worker(wid, wqueue, intern_request);
+                            } else {
+                                if(status == -1) //Aca hay que cambiar mucho el request.. por eso es mejor hacerlo con fill_request
+                                    fill_request(intern_request, WRT, 0, request->main_worker, "-1", NULL, NULL, request->client_id, request->client_queue);
+                                else if(status == -3)
+                                    fill_request(intern_request, WRT, 0, request->main_worker, "-3", NULL, NULL, request->client_id, request->client_queue);
+                                else
+                                    fill_request(intern_request, WRT, 0, request->main_worker, "0", ret, NULL, request->client_id, request->client_queue);
+
+                                SEND_REQ_MAIN(intern_request);
+                            }
+                        }
+                    }
+                    break; 
+
+                case CLO:
+                    if(!(request->external) && ((request->main_worker) == wid)){
+                        if(strcmp(request->arg1, "-1") == 0)
+                            fill_reply(ans, F_CLOSED, NULL);
+                        else if (strcmp(request->arg1, "-2") == 0)
+                            fill_reply(ans, BAD_FD, NULL);
+                        else
+                            fill_reply(ans, NONE, NULL);
+
+                        SEND_ANS();	
+                    } else {
+
+                        int status = close_file(files, fd_pool, atoi(request->arg0));
+
+                        //BORRAR
+                        printf("Comprobación CLO: %d.\n", status);
+                        //
+
+                        if(request->external){
+                            if(status == -2){
+                                if(N_WORKERS > 1){
+                                    intern_request = request;
+                                    intern_request->external = 0;
+                                    intern_request->arg1 = "-2";
+                                    send_next_worker(wid, wqueue, intern_request);
+                                } else {
+                                    fill_reply(ans, BAD_FD, NULL);
+                                    SEND_ANS();
+                                }
+                            } else {
+                                if(status == -1)
+                                    fill_reply(ans, F_CLOSED, NULL);
+                                else{
+                                    fill_reply(ans, NONE, NULL);
+                                }
+                                SEND_ANS();
+                            }
+                        } else {
+                            intern_request = request;
+                            intern_request->external = 0;
+                            if(status == -2){
+                                intern_request->arg1 = "-2";
+                                send_next_worker(wid, wqueue, intern_request);
+                            } else {
+                                if(status == -1)
+                                    intern_request->arg1 = "-1";
+                                else{
+                                    intern_request->arg1 = "0";
+                                }
+                                SEND_REQ_MAIN(intern_request);
+                            }
+                        }
+                    }
+                    break;
+
+                case BYE:
+                    if(request->main_worker == wid){
+                        if(!(request->external) || N_WORKERS == 1){
+                            close_all_files(files, fd_pool);
+                            fill_reply(ans, NONE, NULL);
+                            SEND_ANS();
+                        } else {
+                            intern_request = request;
+                            intern_request->external = 0;
+                            send_next_worker(wid, wqueue, intern_request);
+                        }
+                    } else {
+                        close_all_files(files, fd_pool);
+                        send_next_worker(wid, wqueue, request);
+                    }
+                    break;
+            }
         }
 	}
 						
@@ -659,9 +648,15 @@ int init_workers(){
         if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0644, NULL)) == (mqd_t) -1)
             ERROR("\nDFS_SERVER: Error opening message queue for workers\n");
         
+        
+        // Create the global file descriptors pool
+        FDPool *fd_pool = createFDPool(MAX_OPEN_FILES);
+        
+        // Create the worker session
         Worker_Info *newWorker = malloc(sizeof (Worker_Info));
         newWorker->id = i;
         newWorker->queue = worker_queues;
+        newWorker->fd_pool = fd_pool;
         
         // Spawn a new worker
         pthread_create(&workers[i], NULL, worker, newWorker);

@@ -16,12 +16,14 @@
 #include <pthread.h>
 #include <mqueue.h>
 
+#include "FDPool.h"
+
 #define ERROR(s)    exit((perror(s), -1))
 
 #define N_WORKERS       5
 #define MAX_MESSAGES    10
 #define MAX_FILES       10
-#define MAX_OPEN_FILES  100
+#define MAX_OPEN_FILES  3
 #define MSG_SIZE        1024
 #define F_NAME_SIZE     32
 #define F_CONTENT_SIZE  4096
@@ -70,6 +72,7 @@ typedef struct _File {
 typedef struct _Worker_Info {
 	int id;
 	mqd_t *queue;
+	FDPool *fd_pool;
 	File *files;
 } Worker_Info;
 

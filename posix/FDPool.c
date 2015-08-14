@@ -1,6 +1,4 @@
 #include "Common.h"
-#include "FDPool.h"
-
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -24,16 +22,17 @@ void printFDPool(FDPool *pool){
 }
 
 int newFD(FDPool *pool){
-    for(int i=0; i<pool->size; i++){
-        if(!IS_SET(pool->arr, i)){
-            // Protect the array asignation with the mutex
-            pthread_mutex_lock(&mutex);
-            SET(pool->arr, i);
-            pthread_mutex_unlock(&mutex);
-            return i;
-        }
-    }
-    return -1;
+    int i=0;
+    
+    // Protect the array while searching for first free fd
+    pthread_mutex_lock(&mutex);
+    while(i<pool->size && IS_SET(pool->arr, i)) i++;
+    pthread_mutex_unlock(&mutex);
+    
+    if(i<pool->size){
+        SET(pool->arr, i);
+        return i;
+    } else return -1;
 }
 
 int freeFD(FDPool *pool, int fd){
