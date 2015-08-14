@@ -1,7 +1,9 @@
 #include "Common.h"
 #include "Worker.h"
-#define SEND_ANS()              mq_send(*(request->client_queue), (char *) ans, sizeof(*ans), 1)
-#define SEND_REQ_MAIN(wrequest) mq_send(wqueue[request->main_worker], (char *) wrequest, sizeof(Request), 0);
+#include "FDPool.h"
+
+#define SEND_ANS()          mq_send(*(request->client_queue), (char *) ans, sizeof(*ans), 1)
+#define SEND_REQ_MAIN(req)  mq_send(wqueue[request->main_worker], (char *) req, sizeof(Request), 1);
 
 
 struct mq_attr attr;

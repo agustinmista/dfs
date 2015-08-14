@@ -76,7 +76,9 @@ void *handle_client(void *s){
                     case NONE:
                         if (req->op == OPN || req->op == REA || req->op == LSD) 
                             SEND2CLIENT("dfs> OK: %s\n", ans->answer);
-                        else 
+                        else if(req->op == BYE) 
+                            identified = !identified;
+                        else    
                             SEND2CLIENT("dfs> OK\n");
                         break;
                         
@@ -91,7 +93,7 @@ void *handle_client(void *s){
                 }
                 
                 // If operation was BYE, logout after receive workers OK
-                if(req->op == BYE) identified = !identified;
+                
         
                 
           

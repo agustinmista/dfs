@@ -21,6 +21,7 @@
 #define N_WORKERS 5
 #define MAX_MESSAGES 10 //era para saber cuanto espacio alocar, ver si se hace efectivo en CRE, etc...
 #define MAX_FILES 10
+#define MAX_OPEN_FILES 100
 #define MSG_SIZE 1024
 #define F_NAME_SIZE 32
 #define F_CONTENT_SIZE 4096
@@ -55,7 +56,7 @@ typedef struct _Session {
 } Session;
 
 typedef struct _File {
-	char *name; //32
+	char *name;
 	int fd;            
 	int open;      // -1 if closed, client_id otherwise
 	int cursor;
@@ -84,7 +85,7 @@ typedef struct _Request {
 	char *arg0;			
 	char *arg1;
 	char *arg2;
-	int client_id;		//ID del cliente que inició el request - necesario?
+	int client_id;		    //ID del cliente que inició el request - necesario?
 	mqd_t *client_queue;	//Puntero a la cola del cliente	-> ver sin puntero
 } Request;
 
