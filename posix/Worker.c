@@ -11,7 +11,24 @@ struct mq_attr attr;
 int file_descriptor = INIT_FD;
 pthread_mutex_t fd_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-//Ver comprobaciones de malloc y otras..
+//MODIFICAR//
+int new_fd(){
+    
+    pthread_mutex_lock(&fd_mutex);
+		int tmp_fd = file_descriptor;
+        file_descriptor++;
+    pthread_mutex_unlock(&fd_mutex);
+    
+    return tmp_fd;
+}
+
+int free_fd(){
+    
+    return -1;
+
+}
+
+//MODIFICAR//
 
 void print_request(int wid, Request *r){    //Ok
     printf("DFS_SERVER_REQ: [worker: %d] [id: %d] [op: %d] [external: %d] [arg0:'%s'] [arg1:'%s\'] [arg2:'%s']\n",
@@ -34,7 +51,6 @@ void fill_request (Request *int_req, Operation op, int external, int main_worker
     int_req->client_id = client_id;
     int_req->client_queue = client_queue;            
 }
-
 
 File *create_file(){	//Ok
     File *newFile;
@@ -78,6 +94,7 @@ int close_file(File *files, int fd){ //0 si se pudo cerrar, -1 si ya estaba cerr
 			else{
 				files->open = -1;
 				files->cursor = 0;
+                files->fd = free_fd();
 				return 0;
 			}
 		}
@@ -95,6 +112,7 @@ int open_file(int client_id, File *files, char *nombre){ //Ok
 				return -1;
 			} else {
 				files->open = client_id;
+                files->fd = new_fd();
 				return (files->fd);
 			}
 		}	
@@ -112,44 +130,6 @@ void close_all_files(File *files){ //OK
 		}	
 		files = files->next;
 	}
-}
-
-int delete_file(File *files, File *fst_file, char *nombre){ //Todavía tengo problemas cuando 
-	
-	File *prev = NULL;
-	
-	if(files){
-		if(!strcmp(files->name, nombre)){
-			if((files->open) == -1){
-				prev = files;
-				files = files->next;
-                free(prev->name);
-                free(prev->content);
-				free(prev);
-				fst_file = files;
-				return 0; //ok, cerrado
-			} else { 
-				return -1;	//Abierto
-			}
-		}
-		prev = files;
-		files = files->next;
-		while(prev){
-			if(!strcmp(files->name, nombre)){
-				if((files->open) == -1){
-					prev->next = files->next;
-                    free(files->name);
-                    free(files->content);
-					free(files);
-					return 0;	//OK, borrado
-				} else 
-					return -1;	//Abierto
-			}
-			prev = files;
-			files = files->next;
-		}
-	}
-	return -2; //No existe
 }
 
 char *list_files(File *files){ //OK
@@ -309,20 +289,15 @@ void *worker(void *w_info){
 				if((request->main_worker) == wid){
 					if((!(request->external) && (strcmp(request->arg1, "0") == 0)) || (N_WORKERS == 1)){	
 						if(is_open(files, request->arg0) == -2){
-	
-							pthread_mutex_lock(&fd_mutex);
-								int tmp_fd = file_descriptor;
-								file_descriptor++;
-							pthread_mutex_unlock(&fd_mutex);
-							
+				
 							File *new = create_file();
 							if(new){
 								memcpy(new -> name, request->arg0, F_NAME_SIZE-1);
-								new -> fd = tmp_fd;
+								new -> fd = -1;
 								new -> open = -1;
+                                (new->content)[0] = '\0'; //Ver--
 								new -> cursor = 0;
-								new -> size = 0; //?
-								new -> content = NULL;
+								new -> size = 0; 
 								new -> next = files_init; 
 							}	
 							files_init = new;
@@ -429,21 +404,96 @@ void *worker(void *w_info){
 				break; 
                 
 			case WRT:
-				fill_reply(ans, NOT_IMP, NULL);
-				SEND_ANS();
-				break;
+            
+				if(!(request->external) && ((request->main_worker) == wid)){
+					if(strcmp(request->arg0, "-1") == 0)
+						fill_reply(ans, F_OPEN, NULL);
+					else if (strcmp(request->arg0, "-2") == 0)
+						fill_reply(ans, BAD_FD, NULL);
+                    else if (strcmp(request->arg0, "-3") == 0)
+                        fill_reply(ans, F_NOTSPACE, NULL);
+					else
+						fill_reply(ans, NONE, request->arg1);
+					
+					SEND_ANS();	
+				} else {
+					
+                    int status = -2;
+                    
+                    while(files){
+                        if(files->fd == atoi(request->arg0)){ 
+                            status = -1;
+                            if(files->open == request->client_id){
+                                int sz = strlen(files->content);
+                                if((sz+atoi(request->arg1)+2)<(F_CONTENT_SIZE)){
+                                    if(sz > 0)
+                                        strcat(files->content, " ");
+                                    strcat(files->content, request->arg2);
+                                    files->size = strlen(files->content);
+                                    printf("DFS_SERVER: Content updated: [name: %s] [content: %s]\n", files->name, files->content);
+                                    status = 0;
+                                }else
+                                    status = -3;
+                            }
+                            break;
+                        }
+                        files=files->next;
+                    }
+					if(request->external){
+						if(status == -2){
+							if(N_WORKERS > 1){
+                                intern_request = request;
+                                intern_request->external = 0;
+								send_next_worker(wid, wqueue, intern_request);
+							} else {
+								fill_reply(ans, BAD_FD, NULL);
+								SEND_ANS();
+							}
+						} else {
+							if(status == -1)
+								fill_reply(ans, F_OPEN, NULL);
+                            else if(status == -3)
+                                fill_reply(ans, F_NOTSPACE, NULL);
+							else
+                                fill_reply(ans, NONE, NULL);
+							
+							SEND_ANS();
+						}
+					} else {
+						if(status == -2){
+                            if((wid == request->main_worker-1)||((wid == N_WORKERS-1) &&(request->main_worker == 0)))
+                                fill_request(intern_request, WRT, 0, request->main_worker, "-2", NULL, NULL, request->client_id, request->client_queue);
+                            else {
+                                intern_request = request;
+                                intern_request->external = 0;
+                            }
+                            send_next_worker(wid, wqueue, intern_request);
+                        } else {
+							if(status == -1) //Aca hay que cambiar mucho el request.. por eso es mejor hacerlo con fill_request
+								fill_request(intern_request, WRT, 0, request->main_worker, "-1", NULL, NULL, request->client_id, request->client_queue);
+                            else if(status == -3)
+                                fill_request(intern_request, WRT, 0, request->main_worker, "-3", NULL, NULL, request->client_id, request->client_queue);
+                            else
+								fill_request(intern_request, WRT, 0, request->main_worker, "0", NULL, NULL, request->client_id, request->client_queue);
+                                
+							SEND_REQ_MAIN(intern_request);
+						}
+					}
+				}
+				break; 
                 
 			case REA:
-				fill_reply(ans, NOT_IMP, NULL);
-				SEND_ANS();
-				break;
+                
+                fill_reply(ans, NOT_IMP, NULL);
+                SEND_ANS();
+                break;
                 
 			case CLO:
 				if(!(request->external) && ((request->main_worker) == wid)){
 					if(strcmp(request->arg1, "-1") == 0)
 						fill_reply(ans, F_CLOSED, NULL);
 					else if (strcmp(request->arg1, "-2") == 0)
-						fill_reply(ans, F_NOTEXIST, NULL);
+						fill_reply(ans, BAD_FD, NULL);
 					else
 						fill_reply(ans, NONE, NULL);
 					
@@ -464,7 +514,7 @@ void *worker(void *w_info){
 								intern_request->arg1 = "-2";
 								send_next_worker(wid, wqueue, intern_request);
 							} else {
-								fill_reply(ans, F_NOTEXIST, NULL);
+								fill_reply(ans, BAD_FD, NULL);
 								SEND_ANS();
 							}
 						} else {
@@ -518,204 +568,7 @@ void *worker(void *w_info){
         files = files_init;
 
 			switch(request->op){
-                    
-				case DEL:{	//DONE
-					if(request->external){
-						
-						int status = delete_file(files, request->arg0);
-						
-						if(status == 0){ //borrado
-							
-							ans->err = NONE;
-							ans->answer = NULL;
-							SEND_ANS();
-							
-						}
-						else if(status == -1){ //error, abierto
-							 
-							 ans->err = F_OPEN;
-							 ans->answer = NULL;
-							 SEND_ANS();
-							 
-						}
-						else{ //no existe, comprobar otros
-							
-							if(N_WORKERS == 1){
-								
-								ans->err = NONE;
-								ans->answer = NULL;
-								SEND_ANS();
-								
-							}
-							else{
-								
-								intern_request -> op = DEL;
-								intern_request -> external = 0;
-								intern_request -> main_worker = request->main_worker;
-								intern_request -> arg0 = request -> arg0;
-								intern_request -> arg1 = "-2";
-								intern_request -> arg2 = NULL;
-								intern_request -> client_id = request -> client_id;
-								intern_request -> client_queue = request -> client_queue;
- 					
-								if(wid == N_WORKERS - 1)
-									mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
-								else
-									mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
-
-							}
-						}
-					}
-					else{
-							
-						if(request->main_worker == wid){ //volví
-							
-							if(strcmp("-1", intern_request->arg1)){ //abierto, error
-								
-								ans->err = F_OPEN;
-								ans->answer = NULL;
-								SEND_ANS();
-								
-							}
-							else{	//Borrado o no existe, OK
-								
-								ans->err = NONE;
-								ans->answer = NULL;
-								SEND_ANS();
-								
-							}
-						}
-						else{
-							
-							int status = delete_file(files, request->arg0);
-							
-							if(status == -2){
-									
-								if(wid == N_WORKERS - 1)
-									mq_send(wqueue[0], (char *) &request, sizeof(request), 0);
-								else
-									mq_send(wqueue[wid+1], (char *) &request, sizeof(request), 0);	
-								
-							}
-							else{
-								
-									intern_request -> op = DEL;
-									intern_request -> external = 0;
-									intern_request -> main_worker = request -> main_worker;
-									intern_request -> arg0 = request -> arg0;
-									
-									if(status == -1)
-										intern_request -> arg1 = "-1";
-									else
-										intern_request -> arg1 = "0";
-										
-									intern_request -> arg2 = NULL;
-									intern_request -> client_id = request -> client_id;
-									intern_request -> client_queue = request -> client_queue;
-									
-									mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), 0);
-							}
-						}
-					}			
-				}
-                break;
-        
-				case WRT:{ //Falta analizar un caso
-					//
-					int found = 0;
-					
-					if((request->external) || (!(request->external)&&(request->main_worker != wid))){ //Pedido externo o interno distinto del ppal
-					
-						while(files != NULL){
-						
-							if(files->fd == atoi(request->arg0)){
-								
-								found = 1;
-								
-								if(files->open != wid){	
-									if(request->external){
-										ans->err = F_CLOSED;
-										ans->answer = "El archivo no está abierto para éste worker.";
-										SEND_ANS();
-										break;
-									}
-									else{
-										intern_request -> op = request->op;
-										intern_request -> external = 0;
-										intern_request -> main_worker = request -> main_worker;
-										intern_request -> arg0 = NULL;
-										intern_request -> arg1 = NULL;
-										intern_request -> arg2 = "-1";
-										intern_request -> client_id = request -> client_id;
-										intern_request -> client_queue = request -> client_queue;
-										
-										mq_send(wqueue[request->main_worker], (char *) &intern_request, sizeof(intern_request), 0);
-										break;
-									}
-								}
-								else{
-								
-									if((request->arg1) <= 0){
-											ans->err = NONE;
-											ans->answer = NULL;
-									}
-									else{
-										
-										strcat(files->content, request->arg2),
-										
-										ans->err = NONE; //cambiar por casos - ARREGLAR!!
-										ans->answer = NULL; //ver en donde hacer el free
-									
-									}
-									SEND_ANS();
-									break;
-								}
-							
-							}
-							else
-								files = files->next;
-							
-						}
-						
-						if((N_WORKERS > 1) && (found == 0)){
-							
-							intern_request -> op = request->op;
-							intern_request -> external = 0;
-							intern_request -> main_worker = request -> main_worker;
-							intern_request -> arg0 = request -> arg0;
-							intern_request -> arg1 = request -> arg1;
-							intern_request -> arg2 = request->arg2;
-							intern_request -> client_id = request -> client_id;
-							intern_request -> client_queue = request -> client_queue;
-							
-							if(wid == N_WORKERS - 1)
-								mq_send(wqueue[0], (char *) &intern_request, sizeof(intern_request), 0);
-							else
-								mq_send(wqueue[wid+1], (char *) &intern_request, sizeof(intern_request), 0);
-						
-						}
-						
-					}
-					else{	//volví
-							
-							if(strcmp(request->arg2, "0") == 0){ //Lectura satisfactoria
-								ans->err = NONE;
-								ans->answer = request->arg1;
-							}
-							else if(strcmp(request->arg2, "-1") == 0){ //Archivo cerrado 
-								ans->err = F_CLOSED;
-								ans->answer = "El archivo no está abierto para éste worker.";
-							}
-							else{
-								ans->err = BAD_FD;	//Les parece o eso era mas para el handler?
-								ans->answer = NULL;
-							}
-							SEND_ANS();
-					}	
-					//
-				}
-                break;    
-                    
+				                    
 				case REA:{
 					
 					int found = 0;

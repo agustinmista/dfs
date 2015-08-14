@@ -45,6 +45,7 @@ typedef enum _Error {
     F_EXIST,
     F_CLOSED,
     F_NOTEXIST,
+    F_NOTSPACE,
     NOT_IMP
 } Error;
 

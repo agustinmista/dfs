@@ -89,6 +89,7 @@ void *handle_client(void *s){
                     case F_CLOSED:   SEND2CLIENT("dfs> ERROR: FILE IS CLOSED\n");          break;
                     case F_EXIST:    SEND2CLIENT("dfs> ERROR: FILE ALREADY EXIST\n");      break;                    
                     case F_NOTEXIST: SEND2CLIENT("dfs> ERROR: FILE NOT EXIST\n");          break;
+                    case F_NOTSPACE: SEND2CLIENT("dfs> ERROR: FILE: NOT ENOUGH SPACE\n");  break;
                     case NOT_IMP:    SEND2CLIENT("dfs> ERROR: COMMAND NOT IMPLEMENTED\n"); break;
                 }
                 
