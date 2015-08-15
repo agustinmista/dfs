@@ -43,14 +43,13 @@ File *create_file(){	//Ok
     
 	if (!(newFile->name = malloc(F_NAME_SIZE))){
         free(newFile);
-        return NULL; //si no retornamos null acá, como hicimos free(newFile)
-                     //entonces newFile->content no sería válido
+        return NULL;
     }
     
 	if(!(newFile->content = malloc(F_CONTENT_SIZE))){
 		free(newFile->name);
 		free(newFile);
-        return NULL;    // este return NULL es redundante pero ayuda a que se entienda que se retorna NULL
+        return NULL;
 	}
 
 	return newFile;
@@ -60,10 +59,11 @@ int send_next_worker(int id, mqd_t *queue, Request *req){ //Ok
     return mq_send(queue[ (id+1)%N_WORKERS ], (char *)req, sizeof(*req), 0);
 }
 
-int is_open(File *files, char *nombre){ //-2 no existe, -1 existe cerrado, id existe abierto por id //Ok
+ //-2 no existe, -1 existe cerrado, id existe abierto por id 
+int is_open(File *files, char *nombre){//Ok
 	while(files){
 		if(!strcmp(files->name, nombre)) 
-            return (files->open);           // no hace falta ver que sea <0, si está cerrado ya es -1 y devolvemos eso
+            return (files->open);
 		files = files->next;
 	}
 	return -2;
@@ -94,18 +94,18 @@ int open_file(int client_id, File *files, FDPool *fd_pool, char *nombre){ //Ok
         
 	   if(!strcmp(files->name, nombre)) {
            
-           if((files->open) != -1)	return -1;   // file already open
+           if((files->open) != -1)	return -1;
 
-           if((files->fd = newFD(fd_pool)) < 0) return -3; // no more space in fd_pool
+           if((files->fd = newFD(fd_pool)) < 0) return -3;
 
            files->open = client_id;
-           return (files->fd);          // success
+           return (files->fd);
         }
         
 		files = files->next;
 	}
     
-	return -2;	// file not found
+	return -2;
 }
 
 void close_all_files(File *files, FDPool *fd_pool){ //OK
@@ -339,7 +339,7 @@ void *worker(void *w_info){
                         if(strcmp(request->arg1, "-1") == 0)
                             fill_reply(ans, F_OPEN, NULL);
                         else if (strcmp(request->arg1, "-2") == 0)
-                            fill_reply(ans, F_NOTEXIST, NULL);
+                            fill_reply(ans, F_NOTEXIST, NULL);                        
                         else
                             fill_reply(ans, NONE, request->arg1);
 
@@ -347,10 +347,6 @@ void *worker(void *w_info){
                     } else {
 
                         int tmp = open_file(request->client_id, files, fd_pool, request->arg0);
-
-                        //BORRAR
-                        printf("Comprobación OPN: %d.\n", tmp);
-                        //
 
                         if(request->external){
                             if(tmp == -2){
@@ -366,7 +362,9 @@ void *worker(void *w_info){
                             } else {
                                 if(tmp == -1)
                                     fill_reply(ans, F_OPEN, NULL);
-                                else{
+                                else if(tmp == -3)
+                                    fill_reply(ans, F_TOOMANY, NULL);
+                                else {
                                     char *aux;
                                     asprintf(&aux, "FD %d", tmp);
                                     fill_reply(ans, NONE, aux);
@@ -376,19 +374,25 @@ void *worker(void *w_info){
                         } else {
                             intern_request = request;
                             intern_request->external = 0;
+                            
                             if(tmp == -2){
                                 intern_request->arg1 = "-2";
                                 send_next_worker(wid, wqueue, intern_request);
+                                
                             } else {
-                                if(tmp == -1)
+                                if(tmp == -1){
                                     intern_request->arg1 = "-1";
-                                else{
+                                } else if(tmp == -1){
+                                    intern_request->arg1 = "-3";
+                                } else {
                                     char *aux;
                                     asprintf(&aux, "FD %d", tmp);
                                     intern_request->arg1 = aux;
                                 }
+                                printf("DFS_SERVER: File opened: [name: %s] [fd: %d]\n", request->arg0, tmp);
                                 SEND_REQ_MAIN(intern_request);
                             }
+                            
                         }
                     }
                     break; 
@@ -564,15 +568,11 @@ void *worker(void *w_info){
                             fill_reply(ans, BAD_FD, NULL);
                         else
                             fill_reply(ans, NONE, NULL);
-
+                        
                         SEND_ANS();	
                     } else {
 
                         int status = close_file(files, fd_pool, atoi(request->arg0));
-
-                        //BORRAR
-                        printf("Comprobación CLO: %d.\n", status);
-                        //
 
                         if(request->external){
                             if(status == -2){
@@ -605,6 +605,7 @@ void *worker(void *w_info){
                                 else{
                                     intern_request->arg1 = "0";
                                 }
+
                                 SEND_REQ_MAIN(intern_request);
                             }
                         }
@@ -639,15 +640,20 @@ void *worker(void *w_info){
 
 int init_workers(){
     
+    struct mq_attr attr;
+    attr.mq_flags = 0;  
+    attr.mq_maxmsg = MAX_MESSAGES;  
+    attr.mq_msgsize = MSG_SIZE;  
+    attr.mq_curmsgs = 0;
+    
     for(int i = 0; i<N_WORKERS; i++){
         
         // Instance the worker message queue
         char *worker_name;
         asprintf(&worker_name, "/w%d", i);
-
-        if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0644, NULL)) == (mqd_t) -1)
-            ERROR("\nDFS_SERVER: Error opening message queue for workers\n");
         
+        if((worker_queues[i] = mq_open(worker_name, O_RDWR | O_CREAT, 0644, &attr)) == (mqd_t) -1)
+            ERROR("\nDFS_SERVER: Error opening message queue for workers\n");
         
         // Create the global file descriptors pool
         FDPool *fd_pool = createFDPool(MAX_OPEN_FILES);

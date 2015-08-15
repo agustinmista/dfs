@@ -15,7 +15,13 @@ void *init_dispatcher(void *s){
     int socket = *((int *) s);
     int conn_id;
     
-    pthread_t new_client;	
+    pthread_t new_client;
+    
+    struct mq_attr attr;
+    attr.mq_flags = 0;  
+    attr.mq_maxmsg = MAX_MESSAGES;  
+    attr.mq_msgsize = MSG_SIZE;  
+    attr.mq_curmsgs = 0;
     
     printf("DFS_SERVER: Waiting for connections...\n");
     while(1){
@@ -35,7 +41,7 @@ void *init_dispatcher(void *s){
         asprintf(&client_name, "/c%d", conn_id);
         
         mqd_t *client_queue = (mqd_t*) newSession->client_queue;
-        if((*client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0644, NULL)) == (mqd_t)-1)
+        if((*client_queue = mq_open(client_name, O_RDWR | O_CREAT, 0644, &attr)) == (mqd_t)-1)
             ERROR("DFS_SERVER: Error opening message queue for the new client.\n");
 
         
