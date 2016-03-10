@@ -1,0 +1,9 @@
+#!/bin/bash
+
+DEF_ECHR=+
+DEF_PORT=8000
+
+PORT=${1:-$DEF_PORT}
+ECHR=${2:-$DEF_ECHR}
+
+telnet -e $ECHR localhost $PORT
