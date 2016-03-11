@@ -1,7 +1,17 @@
 -module(serv).
 -compile(export_all).
+
 -define(N_WORKERS, 5).
 -define(INIT_FD, 100).
+
+-define(BAD_FD, io_lib:format("dfs> ERROR: BAD FD~n", [])).
+-define(BAD_ARG, io_lib:format("dfs> ERROR: BAD ARG~n", [])).
+-define(F_OPEN, io_lib:format("dfs> ERROR: FILE ALREADY OPEN~n", [])).
+-define(F_CLOSED, io_lib:format("dfs> ERROR: FILE IS CLOSED~n", [])).
+-define(F_EXIST, io_lib:format("dfs> ERROR: FILE ALREADY EXIST~n", [])).
+-define(F_NOTEXIST, io_lib:format("dfs> ERROR: FILE NOT EXIST~n", [])).
+-define(F_NOTSPACE, io_lib:format("dfs> ERROR: FILE: NOT ENOUGH SPACE~n", [])).
+-define(F_TOOMANY, io_lib:format("dfs> ERROR: TOO MANY OPEN FILES~n", [])).
 
 init(Port)->
 
@@ -121,67 +131,67 @@ create_ring([H1|T1], [H2|T2])  ->
     H1 ! {next, H2},
     create_ring(T1, T2).
 
-parse_request(List)->
-    case List of
+parse_request(Cmd)->
+    case Cmd of
         ["CON"]                                 ->  {error, io_lib:format("ERROR ALREADY CONECTED~n", [])};
         ["LSD"]                                 ->  {r_lsd, []};
-        ["LSD"|_]                               ->  {error, io_lib:format("ERROR LSD ETOOMANYARGS~n", [])};
-        ["DEL"]                                 ->  {error, io_lib:format("ERROR DEL EINSARG~n", [])};
+        %["LSD"|_]                               ->  {error, io_lib:format("dfs> ERROR BAD ARGS. Use: LDS~n", [])};
+        %["DEL"]                                 ->  {error, io_lib:format("ERROR DEL EINSARG~n", [])};
         ["DEL", Arg0]                           ->  case is_valid(Arg0) of
                                                         true  -> {r_del, Arg0};
-                                                        false -> {error, io_lib:format("ERROR DEL EBADNAME~n", [])}
+                                                        false -> {error, io_lib:format("ERROR DEL EBADNAME~n", [])} %es necesario?
                                                     end;
-        ["DEL", _|_]                            ->  {error, io_lib:format("ERROR DEL ETOOMANYARGS~n", [])};
-        ["CRE"]                                 ->  {error, io_lib:format("ERROR CRE EINSARG~n", [])};
+        %["DEL", _|_]                            ->  {error, io_lib:format("ERROR DEL ETOOMANYARGS~n", [])};
+        %["CRE"]                                 ->  {error, io_lib:format("ERROR CRE EINSARG~n", [])};
         ["CRE", Arg0]                           ->  case is_valid(Arg0) of
                                                         true  -> {r_cre, Arg0};
                                                         false -> {error, io_lib:format("ERROR CRE EBADNAME~n", [])}
                                                     end;
-        ["CRE", _|_]                            ->  {error, io_lib:format("ERROR CRE ETOOMANYARGS~n", [])};
-        ["OPN"]                                 ->  {error, io_lib:format("ERROR OPN EINSARG~n", [])};
+        %["CRE", _|_]                            ->  {error, io_lib:format("ERROR CRE ETOOMANYARGS~n", [])};
+        %["OPN"]                                 ->  {error, io_lib:format("ERROR OPN EINSARG~n", [])};
         ["OPN", Arg0]                           ->  case is_valid(Arg0) of
                                                         true  -> {r_opn, Arg0};
                                                         false -> {error, io_lib:format("ERROR OPN EBADNAME~n", [])}
                                                     end;
-        ["OPN", _|_]                            ->  {error, io_lib:format("ERROR OPN ETOOMANYARGS~n", [])};
-        ["WRT"]                                 ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
-        ["WRT", "FD"]                           ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
-        ["WRT", "FD", _]                        ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
-        ["WRT", "FD", _, "SIZE"]                ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
-        ["WRT", "FD", _, "SIZE", _]             ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
-        ["WRT", "FD", Arg0, "SIZE", Arg1|Tail]  ->  Arg2Aux = lists:foldl(fun(Word, L) -> L ++ Word ++ " " end, [], Tail),
+        %["OPN", _|_]                            ->  {error, io_lib:format("ERROR OPN ETOOMANYARGS~n", [])};
+        %["WRT"]                                 ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
+        %["WRT", "FD"]                           ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
+        %["WRT", "FD", _]                        ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
+        %["WRT", "FD", _, "SIZE"]                ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
+        %["WRT", "FD", _, "SIZE", _]             ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
+        ["WRT", "FD", Arg0, "SIZE", Arg1|Tail]  ->  Arg2Aux = lists:foldl(fun(Word, L) -> L ++ Word ++ " " end, [], Tail), %ver tail
                                                     L = string:len(Arg2Aux),
                                                     Arg2 = string:left(Arg2Aux, L-1),
                                                     Size = element(1,string:to_integer(Arg1)),
                                                     Fd = element(1,string:to_integer(Arg0)),
                                                     if
-                                                        Fd < ?INIT_FD   -> {error, io_lib:format("ERROR WRT EBADFD~n", [])};
+                                                        Fd < ?INIT_FD   -> {error, ?BAD_FD};
                                                         Size < 0        -> {error, io_lib:format("ERROR WRT EBADSIZE~n", [])};
                                                         Size /= L-1     -> {error, io_lib:format("ERROR WRT ESIZENOTMATCHINGBUFFER~n", [])};
                                                         true            -> {r_wrt, Fd, Size, Arg2}
                                                     end;
-        ["REA"]                                 ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
-        ["REA", "FD"]                           ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
-        ["REA", "FD", _]                        ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
-        ["REA", "FD", _, "SIZE"]                ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
+        %["REA"]                                 ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
+        %["REA", "FD"]                           ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
+        %["REA", "FD", _]                        ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
+        %["REA", "FD", _, "SIZE"]                ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
         ["REA", "FD", Arg0, "SIZE", Arg1]       ->  Fd = element(1,string:to_integer(Arg0)),
                                                     Size = element(1,string:to_integer(Arg1)),
                                                     if
-                                                        Fd < ?INIT_FD   -> {error, io_lib:format("ERROR REA EBADFD~n", [])};
+                                                        Fd < ?INIT_FD   -> {error, ?BAD_FD};
                                                         Size < 0        -> {error, io_lib:format("ERROR REA EBADIZE~n", [])};
                                                         true            -> {r_rea, Fd, Size}
                                                     end;
-        ["REA", "FD", _, "SIZE", _|_]           ->  {error, io_lib:format("ERROR REA ETOOMANYARGS~n", [])};
-        ["CLO"]                                 ->  {error, io_lib:format("ERROR CLO EINSARG~n", [])};
-        ["CLO", "FD"]                           ->  {error, io_lib:format("ERROR CLO EINSARG~n", [])};
+        %["REA", "FD", _, "SIZE", _|_]           ->  {error, io_lib:format("ERROR REA ETOOMANYARGS~n", [])};
+        %["CLO"]                                 ->  {error, io_lib:format("ERROR CLO EINSARG~n", [])};
+        %["CLO", "FD"]                           ->  {error, io_lib:format("ERROR CLO EINSARG~n", [])};
         ["CLO", "FD", Arg0]                     ->  Fd = element(1,string:to_integer(Arg0)),
                                                     if
-                                                        Fd < ?INIT_FD   -> {error, io_lib:format("ERROR CLO EBADFD~n", [])};
+                                                        Fd < ?INIT_FD   -> {error, ?BAD_FD};
                                                         true            -> {r_clo, Fd}
                                                     end;
-        ["CLO", "FD", _|_]                      ->  {error, io_lib:format("EROR CLO ETOOMANYARGS~n", [])};
+        %["CLO", "FD", _|_]                      ->  {error, io_lib:format("EROR CLO ETOOMANYARGS~n", [])};
         ["BYE"]                                 ->  {r_bye};
-        _                                       ->  {error, io_lib:format("ERROR EBADCMD~n", [])}
+        _                                       ->  {error, io_lib:format("dfs> ERROR: BAD COMMAND~n", [])}
     end.
 
 is_valid(Name)->
@@ -201,9 +211,6 @@ close_files([{Name, _, C_pid, _, Siz, Cont, 0}|T], C_pid)   -> [{Name, 0, 0, 0, 
 close_files([{_,_,_,_,_,_, 1}|T], C_pid)                    -> close_files(T, C_pid);
 close_files([{Name, Fd, Op, Pos, Siz, Cont, D}|T], C_pid)   -> [{Name, Fd, Op, Pos, Siz, Cont, D}|close_files(T, C_pid)].
 
-
-
-
 worker(Files, Pool, Next)->
     receive
         {next, Next_W} -> worker(Files, Pool, Next_W);
@@ -216,9 +223,9 @@ worker(Files, Pool, Next)->
                                    NewFiles = [{Name, 0, 0, 0, 0, [], 0}|Files],
                                    worker(NewFiles, Pool, Next);
                {r_opn, _}      ->  C_pid ! io_lib:format("ERROR OPN EBADNAME~n", []);
-               {r_wrt, _,_,_}  ->  C_pid ! io_lib:format("ERROR WRT EBADFD~n", []);
-               {r_rea, _,_}    ->  C_pid ! io_lib:format("ERROR REA EBADFD~n", []);
-               {r_clo, _}      ->  C_pid ! io_lib:format("ERROR CLO EBADFD~n", [])
+               {r_wrt, _,_,_}  ->  C_pid ! ?BAD_FD;
+               {r_rea, _,_}    ->  C_pid ! ?BAD_FD;
+               {r_clo, _}      ->  C_pid ! ?BAD_FD
             end,
             worker(Files, Pool, Next);
         {Req, C_pid, Count} ->  case Req of
@@ -248,7 +255,7 @@ worker(Files, Pool, Next)->
                                                                                                         NewFiles = lists:keyreplace(Name, 1, Files, {Name, NewFd, C_pid, 0, Siz, Cont,0}),
                                                                                                         C_pid ! io_lib:format("OK FD ~p~n", [NewFd]),
                                                                                                         worker(NewFiles, Pool, Next);
-                                                            {value, _}                              ->  C_pid ! io_lib:format("ERROR OPN EFILEALREADYOPENED~n", []);
+                                                            {value, _}                              ->  C_pid ! ?F_OPEN;
                                                             false                                   ->  Next ! {{r_opn, Name}, C_pid, Count+1}
                                                       end;
                                     {r_wrt, Fd, Size, Buff}-> case lists:keysearch(Fd, 2, Files) of
@@ -280,7 +287,7 @@ worker(Files, Pool, Next)->
                                                                                                                         ok -> NewFiles = [{Name, 0, 0, 0, Siz, Cont, 0}|NF],
                                                                                                                               C_pid ! io_lib:format("OK~n", []),
                                                                                                                               worker(NewFiles, Pool, Next);
-                                                                                                                        fail -> C_pid ! io_lib:format("ERROR CLO BADFD~n", []),
+                                                                                                                        fail -> C_pid ! ?BAD_FD,
                                                                                                                                 worker(Files, Pool, Next)
                                                                                                                     end;
                                                                 {value, {Name,_, C_pid,_,_,_, 1}, NF}           ->  C_pid ! io_lib:format("~p: WAS PENDING TO DELETE. DELETED~n", [Name]),
