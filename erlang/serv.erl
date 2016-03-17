@@ -143,21 +143,21 @@ parse_request(Cmd)->
         %["DEL"]                                 ->  {error, io_lib:format("ERROR DEL EINSARG~n", [])};
         ["DEL", Arg0]                           ->  case is_valid(Arg0) of
                                                         true  -> {r_del, Arg0};
-                                                        false -> {error, F_NOTEXIST}
+                                                        false -> {error, ?F_NOTEXIST}
 %                                                        false -> {error, io_lib:format("ERROR DEL EBADNAME~n", [])} %es necesario?
                                                     end;
         %["DEL", _|_]                            ->  {error, io_lib:format("ERROR DEL ETOOMANYARGS~n", [])};
         %["CRE"]                                 ->  {error, io_lib:format("ERROR CRE EINSARG~n", [])};
         ["CRE", Arg0]                           ->  case is_valid(Arg0) of
                                                         true  -> {r_cre, Arg0};
-                                                        false -> {error, F_NOTEXIST}
+                                                        false -> {error, ?F_NOTEXIST}
 %                                                        false -> {error, io_lib:format("ERROR CRE EBADNAME~n", [])}
                                                     end;
         %["CRE", _|_]                            ->  {error, io_lib:format("ERROR CRE ETOOMANYARGS~n", [])};
         %["OPN"]                                 ->  {error, io_lib:format("ERROR OPN EINSARG~n", [])};
         ["OPN", Arg0]                           ->  case is_valid(Arg0) of
                                                         true  -> {r_opn, Arg0};
-                                                        false -> {error, F_NOTEXIST}
+                                                        false -> {error, ?F_NOTEXIST}
 %                                                        false -> {error, io_lib:format("ERROR OPN EBADNAME~n", [])}
                                                     end;
         %["OPN", _|_]                            ->  {error, io_lib:format("ERROR OPN ETOOMANYARGS~n", [])};
@@ -174,7 +174,7 @@ parse_request(Cmd)->
                                                     if
                                                         Fd < ?INIT_FD   -> {error, ?BAD_FD};
                                                         Size < 0        -> {error, io_lib:format("ERROR WRT EBADSIZE~n", [])};
-                                                        Size /= L-1     -> {error, F_NOTSPACE};
+                                                        Size /= L-1     -> {error, ?F_NOTSPACE};
 %                                                        Size /= L-1     -> {error, io_lib:format("ERROR WRT ESIZENOTMATCHINGBUFFER~n", [])};
                                                         true            -> {r_wrt, Fd, Size, Arg2}
                                                     end;
