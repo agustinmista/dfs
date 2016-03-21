@@ -4,16 +4,16 @@
 -define(N_WORKERS, 5).
 -define(INIT_FD, 100).
 
--define(BAD_FD, io_lib:format("dfs> ERROR: BAD FD~n", [])).
--define(BAD_ARG, io_lib:format("dfs> ERROR: BAD ARG~n", [])).
--define(F_OPEN, io_lib:format("dfs> ERROR: FILE ALREADY OPEN~n", [])).
--define(F_CLOSED, io_lib:format("dfs> ERROR: FILE IS CLOSED~n", [])).
--define(F_EXIST, io_lib:format("dfs> ERROR: FILE ALREADY EXIST~n", [])).
--define(F_NOTEXIST, io_lib:format("dfs> ERROR: FILE NOT EXIST~n", [])).
--define(F_NOTSPACE, io_lib:format("dfs> ERROR: FILE: NOT ENOUGH SPACE~n", [])).
--define(F_TOOMANY, io_lib:format("dfs> ERROR: TOO MANY OPEN FILES~n", [])).
+-define(BAD_FD, io_lib:format("BAD FD", [])).
+-define(BAD_ARG, io_lib:format("BAD ARG", [])).
+-define(F_OPEN, io_lib:format("FILE ALREADY OPEN", [])).
+-define(F_CLOSED, io_lib:format("FILE IS CLOSED", [])).
+-define(F_EXIST, io_lib:format("FILE ALREADY EXISTS", [])).
+-define(F_NOTEXIST, io_lib:format("FILE NOT EXISTS", [])).
+-define(F_NOTSPACE, io_lib:format("FILE: NOT ENOUGH SPACE", [])). %ver
+-define(F_TOOMANY, io_lib:format("TOO MANY OPEN FILES~n", [])). %ver
 
-% ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+% [INIT]------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 init(Port)->
 
@@ -38,7 +38,7 @@ init(Port)->
         _                     ->  io:format("DFSSERV: Error creating listening socket.~n", [])
     end.
 
-% ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+% [DISPATCHER]------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 dispatcher(ListenerSocket, ClientId, Workers)->
     % Wait for new connections
@@ -52,7 +52,7 @@ dispatcher(ListenerSocket, ClientId, Workers)->
                             dispatcher(ListenerSocket, ClientId, Workers)
     end.
 
-% ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+% [HANDLER]------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 handle_client(Socket, ClientId, W_pid)->
     case gen_tcp:recv(Socket, 0) of
@@ -68,36 +68,95 @@ handle_client(Socket, ClientId, W_pid)->
   end.
 
 handle_client2(Socket, ClientId, W_pid)->
+    flush(), % ver - Creo que deberíamos eliminar mensajes que pueden quedar pendientes en after
     gen_tcp:send(Socket, io_lib:format("dfs>", [])),
     case gen_tcp:recv(Socket, 0) of
         {ok, Buff}  ->  L = string:len(Buff),
                         Buffer = string:left(Buff, L-2),
                         if
                             L < 4 ->
-                                Answer = io_lib:format("ERROR EBADCMD~n", []),
+                                Answer = io_lib:format("dfs> ERROR BAD COMMAND~n", []),
                                 gen_tcp:send(Socket, Answer),
                                 handle_client2(Socket, ClientId, W_pid);
                             true ->
-                                Req = parse_request(string:tokens(Buffer, " ")),
+                                Req = parseRequest(string:tokens(Buffer, " ")),
                                 case Req of
-                                    {error, Answer} ->  gen_tcp:send(Socket, Answer),
-                                                        handle_client2(Socket, ClientId, W_pid);
-                                    {r_bye}         ->  W_pid ! {Req, self(), 0},
-                                                        io:format("Disconnected ClientId ~p~n", [ClientId]),
-                                                        gen_tcp:close(Socket);
-                                    _               ->  W_pid ! {Req, self(), 0},
-                                                        receive
-                                                            ABuff -> gen_tcp:send(Socket, ABuff)
-                                                        after 500 -> gen_tcp:send(Socket, "ERROR ETIME" ++ "\n")
-                                                        end,
-                                                        handle_client2(Socket, ClientId, W_pid)
+                                    {parse_error, AnswerF} -> gen_tcp:send(Socket, "dfs> ERROR: " ++ AnswerF ++ " \n"),
+                                                              handle_client2(Socket, ClientId, W_pid);
+                                    {bye}                  -> W_pid ! {Req, self(), 0},
+                                                              io:format("dfs> Client [id: ~p] disconnected.~n", [ClientId]),
+                                                              gen_tcp:close(Socket);
+                                    _                      ->  W_pid ! {Req, self(), 0},
+                                                               receive
+                                                                   {ok, ok}        -> Ans = "dfs> OK \n",
+                                                                                      gen_tcp:send(Socket,Ans);
+                                                                   {ok,Answer}     -> Ans = "dfs> OK: " ++ Answer ++ " \n",
+                                                                                      gen_tcp:send(Socket,Ans);
+                                                                   {error, Answer} -> Ans = "dfs> ERROR: " ++ Answer ++ " \n",
+                                                                                      gen_tcp:send(Socket, Ans)
+                                                               after 300 -> gen_tcp:send(Socket, "dfs> ERROR 62 ETIME \n" )
+                                                               end,
+                                                               handle_client2(Socket, ClientId, W_pid)
                                 end
                         end;
         {error, closed} ->  W_pid ! {{r_bye}, self(), 0},
-                            io:format("Disconnected ClientId ~p~n", [ClientId])
+                            io:format("DFS_SERVER: Client [id: ~p] disconected.~n", [ClientId])
     end.
 
-% ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+parseRequest(Cmd)->
+    case Cmd of
+        ["CON"]                                 ->  {parse_error, io_lib:format("ALREADY CONECTED", [])};
+        ["LSD"]                                 ->  {lsd, []};
+        ["DEL", Arg0]                           ->  {del, Arg0};
+        ["CRE", Arg0]                           ->  case is_valid(Arg0) of
+                                                        true  -> {cre, Arg0};
+                                                        false -> {parse_error, ?BAD_ARG}
+                                                    end;
+        ["OPN", Arg0]                           ->  {opn, Arg0};
+        ["WRT", "FD", Arg0, "SIZE", Arg1|Tail]  ->  Arg2 = string:join(Tail, " "), %ver tail
+                                                    Len = string:len(Arg2),
+                                                    Fd = element(1,string:to_integer(Arg0)),
+                                                    Size = element(1,string:to_integer(Arg1)),
+                                                    if
+                                                        Fd < ?INIT_FD   -> {parse_error, ?BAD_FD};
+                                                        Size < 0        -> {parse_error, ?BAD_ARG};
+                                                        Len /= Size     -> {parse_error, ?BAD_ARG};
+                                                        true            -> {wrt, Fd, Size, Arg2}
+                                                    end;
+        ["REA", "FD", Arg0, "SIZE", Arg1]       ->  Fd = element(1,string:to_integer(Arg0)),
+                                                    Size = element(1,string:to_integer(Arg1)),
+                                                    if
+                                                        Fd < ?INIT_FD   -> {parse_error, ?BAD_FD};
+                                                        Size < 0        -> {parse_error, ?BAD_ARG};
+                                                        true            -> {rea, Fd, Size}
+                                                    end;
+        ["CLO", "FD", Arg0]                     ->  Fd = element(1,string:to_integer(Arg0)),
+                                                    if
+                                                        Fd < ?INIT_FD   -> {parse_error, ?BAD_FD};
+                                                        true            -> {clo, Fd}
+                                                    end;
+        ["BYE"]                                 ->  {bye};
+        _                                       ->  {parse_error, io_lib:format("BAD COMMAND", [])}
+    end.
+
+is_valid(Name)->
+    lists:all(
+        fun(X) ->
+            ((X >= $a) and (X =< $z)) or
+            ((X >= $A) and (X =< $Z)) or
+            ((X >= $0) and (X =< $9)) or
+            (X == $.)
+            end,
+        Name).
+        
+flush() ->
+    receive
+        _ -> flush()
+    after 0 -> ok
+    end.
+
+% [POOL]------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 pool(UsedFDs) ->
     receive
@@ -122,7 +181,8 @@ checkInUse(N, L) ->
         true -> checkInUse(N+1, L);
         false -> N
     end.
-% ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    
+% [WORKERS]------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 init_workers(0, _)        -> [];
 init_workers(N, FDPool)   ->
@@ -135,182 +195,105 @@ create_ring([H1|T1], [H2|T2])  ->
     H1 ! {next, H2},
     create_ring(T1, T2).
 
-parse_request(Cmd)->
-    case Cmd of
-        ["CON"]                                 ->  {error, io_lib:format("ERROR ALREADY CONECTED~n", [])};
-        ["LSD"]                                 ->  {r_lsd, []};
-        %["LSD"|_]                               ->  {error, io_lib:format("dfs> ERROR BAD ARGS. Use: LDS~n", [])};
-        %["DEL"]                                 ->  {error, io_lib:format("ERROR DEL EINSARG~n", [])};
-        ["DEL", Arg0]                           ->  case is_valid(Arg0) of
-                                                        true  -> {r_del, Arg0};
-                                                        false -> {error, ?F_NOTEXIST}
-%                                                        false -> {error, io_lib:format("ERROR DEL EBADNAME~n", [])} %es necesario?
-                                                    end;
-        %["DEL", _|_]                            ->  {error, io_lib:format("ERROR DEL ETOOMANYARGS~n", [])};
-        %["CRE"]                                 ->  {error, io_lib:format("ERROR CRE EINSARG~n", [])};
-        ["CRE", Arg0]                           ->  case is_valid(Arg0) of
-                                                        true  -> {r_cre, Arg0};
-                                                        false -> {error, ?F_NOTEXIST}
-%                                                        false -> {error, io_lib:format("ERROR CRE EBADNAME~n", [])}
-                                                    end;
-        %["CRE", _|_]                            ->  {error, io_lib:format("ERROR CRE ETOOMANYARGS~n", [])};
-        %["OPN"]                                 ->  {error, io_lib:format("ERROR OPN EINSARG~n", [])};
-        ["OPN", Arg0]                           ->  case is_valid(Arg0) of
-                                                        true  -> {r_opn, Arg0};
-                                                        false -> {error, ?F_NOTEXIST}
-%                                                        false -> {error, io_lib:format("ERROR OPN EBADNAME~n", [])}
-                                                    end;
-        %["OPN", _|_]                            ->  {error, io_lib:format("ERROR OPN ETOOMANYARGS~n", [])};
-        %["WRT"]                                 ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
-        %["WRT", "FD"]                           ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
-        %["WRT", "FD", _]                        ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
-        %["WRT", "FD", _, "SIZE"]                ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
-        %["WRT", "FD", _, "SIZE", _]             ->  {error, io_lib:format("ERROR WRT EINSARG~n", [])};
-        ["WRT", "FD", Arg0, "SIZE", Arg1|Tail]  ->  Arg2Aux = lists:foldl(fun(Word, L) -> L ++ Word ++ " " end, [], Tail), %ver tail
-                                                    L = string:len(Arg2Aux),
-                                                    Arg2 = string:left(Arg2Aux, L-1),
-                                                    Size = element(1,string:to_integer(Arg1)),
-                                                    Fd = element(1,string:to_integer(Arg0)),
-                                                    if
-                                                        Fd < ?INIT_FD   -> {error, ?BAD_FD};
-                                                        Size < 0        -> {error, io_lib:format("ERROR WRT EBADSIZE~n", [])};
-                                                        Size /= L-1     -> {error, ?F_NOTSPACE};
-%                                                        Size /= L-1     -> {error, io_lib:format("ERROR WRT ESIZENOTMATCHINGBUFFER~n", [])};
-                                                        true            -> {r_wrt, Fd, Size, Arg2}
-                                                    end;
-        %["REA"]                                 ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
-        %["REA", "FD"]                           ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
-        %["REA", "FD", _]                        ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
-        %["REA", "FD", _, "SIZE"]                ->  {error, io_lib:format("ERROR REA EINSARG~n", [])};
-        ["REA", "FD", Arg0, "SIZE", Arg1]       ->  Fd = element(1,string:to_integer(Arg0)),
-                                                    Size = element(1,string:to_integer(Arg1)),
-                                                    if
-                                                        Fd < ?INIT_FD   -> {error, ?BAD_FD};
-                                                        Size < 0        -> {error, io_lib:format("ERROR REA EBADIZE~n", [])};
-                                                        true            -> {r_rea, Fd, Size}
-                                                    end;
-        %["REA", "FD", _, "SIZE", _|_]           ->  {error, io_lib:format("ERROR REA ETOOMANYARGS~n", [])};
-        %["CLO"]                                 ->  {error, io_lib:format("ERROR CLO EINSARG~n", [])};
-        %["CLO", "FD"]                           ->  {error, io_lib:format("ERROR CLO EINSARG~n", [])};
-        ["CLO", "FD", Arg0]                     ->  Fd = element(1,string:to_integer(Arg0)),
-                                                    if
-                                                        Fd < ?INIT_FD   -> {error, ?BAD_FD};
-                                                        true            -> {r_clo, Fd}
-                                                    end;
-        %["CLO", "FD", _|_]                      ->  {error, io_lib:format("EROR CLO ETOOMANYARGS~n", [])};
-        ["BYE"]                                 ->  {r_bye};
-        _                                       ->  {error, io_lib:format("dfs> ERROR: BAD COMMAND~n", [])}
-    end.
 
-is_valid(Name)->
-    lists:all(
-        fun(X) ->
-            ((X >= $a) and (X =< $z)) or
-            ((X >= $A) and (X =< $Z)) or
-            ((X >= $0) and (X =< $9)) or
-            (X == $.)
-            end,
-        Name).
 
-% FILE = {Name, Fd, Opener, Position, Size, Content, To_Delete}
+% FILE = {Name, Fd, Opener, Cursor, Size, Content} Voy a hacer opener y fd -1 para cerrado
 
-close_files([], _)                                          -> [];
-close_files([{Name, _, C_pid, _, Siz, Cont, 0}|T], C_pid)   -> [{Name, 0, 0, 0, Siz, Cont, 0}|close_files(T, C_pid)];
-close_files([{_,_,_,_,_,_, 1}|T], C_pid)                    -> close_files(T, C_pid);
-close_files([{Name, Fd, Op, Pos, Siz, Cont, D}|T], C_pid)   -> [{Name, Fd, Op, Pos, Siz, Cont, D}|close_files(T, C_pid)].
+close_files([], _, _)                                            -> [];
+close_files([{Name, _, Pid, _, Size, Cont}|T], Pid, Pool)        -> Pool ! {free, Pid},
+                                                                    receive
+                                                                        ok -> [{Name, 0, -1, 0, Size, Cont}|close_files(T, Pid, Pool)]
+                                                                    end;                                                                  
+close_files([{Name, Fd, Open, Cursor, Size, Cont}|T], Pid, Pool) -> [{Name, Fd, Open, Cursor, Size, Cont}|close_files(T, Pid, Pool)].
+                                                                    
 
 worker(Files, Pool, Next)->
     receive
         {next, Next_W} -> worker(Files, Pool, Next_W);
-        {Req, C_pid, ?N_WORKERS} ->
+        {Req, Pid, ?N_WORKERS} -> %vuelta al origen
             case Req of
-               {r_bye}         ->  ok;
-               {r_lsd, List}   ->  C_pid ! "OK " ++ List ++ "\n";
-               {r_del, _}      ->  C_pid ! ?F_NOTEXIST;
-%               {r_del, _}      ->  C_pid ! io_lib:format("ERROR DEL EBADNAME~n", []);
-               {r_cre, Name}   ->  C_pid ! io_lib:format("OK~n", []),
-                                   NewFiles = [{Name, 0, 0, 0, 0, [], 0}|Files],
-                                   worker(NewFiles, Pool, Next);
-               {r_opn, _}      ->  C_pid ! ?F_NOTEXIST;
-%               {r_opn, _}      ->  C_pid ! io_lib:format("ERROR OPN EBADNAME~n", []);
-              % puede ser {_} -> C_pid ! ?BAD_FD; ??
-               {r_wrt, _,_,_}  ->  C_pid ! ?BAD_FD;
-               {r_rea, _,_}    ->  C_pid ! ?BAD_FD;
-               {r_clo, _}      ->  C_pid ! ?BAD_FD
+               {bye}         ->  ok;
+               {lsd, List}   ->  Pid ! {ok,List};
+               {del, _}      ->  Pid ! {error, ?F_NOTEXIST};
+               {cre, Name}   ->  NFiles = [{Name, -1, -1, 0, 0, []}|Files],
+                                 Pid ! {ok,ok},
+                                 worker(NFiles, Pool, Next);
+               {opn, _}      ->  Pid ! {error, ?F_NOTEXIST};
+               {wrt, _,_,_}  ->  Pid ! {error, ?F_NOTEXIST};
+               {rea, _,_}    ->  Pid ! {error, ?F_NOTEXIST};
+               {clo, _}      ->  Pid ! {error, ?F_NOTEXIST};
+               {ok, Ans}     ->  Pid ! {ok, Ans};
+               {error, Ans}  ->  Pid ! {error, Ans} %solo se comunica con el principal
             end,
             worker(Files, Pool, Next);
-        {Req, C_pid, Count} ->  
+  
+        {Req, Pid, Count} ->  
             case Req of
-               {r_bye}       ->  NewFiles = close_files(Files, C_pid),
-                                 Next ! {{r_bye}, C_pid, Count+1},
-                                 worker(NewFiles, Pool, Next);
-               {r_lsd, List} ->  ListedFiles = List ++ lists:foldl(fun({Name,_,_,_,_,_,_}, L) -> L ++ Name ++ " " end, [], Files),
-                                 Next ! {{r_lsd, ListedFiles}, C_pid, Count+1};
-               {r_del, Name} ->  case lists:keytake(Name, 1, Files) of
-                                   {value, {_, 0,_,_,_,_,_},NF}                    ->  C_pid ! io_lib:format("OK~n", []),
-                                                                                       NewFiles = NF,
-                                                                                       worker(NewFiles, Pool, Next);
-                                   {value, {Name, Fd, Op, Pos, Siz, Cont, _}, NF}  ->  C_pid ! io_lib:format("~p: SET TO DELETE~n", [Name]),
-                                                                                       NewFiles = [{Name, Fd, Op, Pos, Siz, Cont, 1}|NF],
-                                                                                       worker(NewFiles, Pool, Next);
-                                   false                                           ->  Next ! {{r_del, Name}, C_pid, Count+1}
-                                 end;
-               {r_cre, Name} ->  case lists:keymember(Name, 1, Files) of
-                                   true    ->  C_pid ! ?F_EXIST;
-%                                   true    ->  C_pid ! io_lib:format("ERROR CRE ENAMEEXISTS~n", []);
-                                   false   ->  Next ! {{r_cre, Name}, C_pid, Count+1}
-                                 end;
-               {r_opn, Name} ->  case lists:keysearch(Name, 1, Files) of
-                                  {value, {Name, 0, _, _, Siz, Cont,_}}   ->  Pool ! {get, self()},
-                                                                              receive
-                                                                               {ok, N} -> NewFd = N
-                                                                              end,
-                                                                              NewFiles = lists:keyreplace(Name, 1, Files, {Name, NewFd, C_pid, 0, Siz, Cont,0}),
-                                                                              C_pid ! io_lib:format("OK FD ~p~n", [NewFd]),
-                                                                              worker(NewFiles, Pool, Next);
-                                  {value, _}                              ->  C_pid ! ?F_OPEN;
-                                  false                                   ->  Next ! {{r_opn, Name}, C_pid, Count+1}
-                                 end;
-              {r_wrt, Fd, Size, Buff}-> case lists:keysearch(Fd, 2, Files) of
-                                         {value, {Name, Fd, C_pid, Pos, Siz, Cont,D}}->  NewFiles = lists:keyreplace(Fd, 2, Files, {Name, Fd, C_pid, Pos, Siz+Size, Cont ++ Buff,D}),
-                                                                                         C_pid ! io_lib:format("OK~n", []),
-                                                                                         worker(NewFiles, Pool, Next);
-                                         {value, _}                                  ->  C_pid ! ?F_CLOSED;
-%                                         {value, _}                                  ->  C_pid ! io_lib:format("ERROR WRT ENOTOPENEDBYCLIENT~n", []);
-                                         false                                       ->  Next ! {{r_wrt, Fd, Size, Buff}, C_pid, Count+1}
+               {bye}       -> NFiles = close_files(Files,Pid,Pool),
+                              Next ! {{bye}, Pid, Count+1},
+                              worker(NFiles, Pool, Next);
+               {lsd, List} -> ListAux = string:join(lists:map(fun ({Name,_,_,_,_,_}) -> Name end, Files), " "),
+                              L1 = string:len(List),
+                              L2 = string:len(ListAux),
+                              if
+                                  L1 == 0    -> Next ! {{lsd, ListAux}, Pid, Count+1};
+                                  L2 == 0    -> Next ! {{lsd, List}, Pid, Count+1};
+                                  true       -> Next ! {{lsd, List ++" "++ ListAux}, Pid, Count+1}
+                              end;
+               {del, Name} -> case lists:keytake(Name, 1, Files) of 
+                                   {value, {Name,_,-1,_,_,_},NFiles} -> Next ! {{ok, ok}, Pid, Count+1},
+                                                                        worker(NFiles, Pool, Next);
+                                   false                             -> Next ! {{del, Name}, Pid, Count+1};
+                                   _                                 -> Next ! {{error, ?F_OPEN}, Pid, Count+1}
+                              end;
+               {cre, Name} -> case lists:keymember(Name, 1, Files) of
+                                  true    ->  Next ! {{error, ?F_EXIST}, Pid, Count+1};
+                                  false   ->  Next ! {{cre, Name}, Pid, Count+1}
+                              end;
+               {opn, Name} -> case lists:keyfind(Name, 1, Files) of
+                                 {Name, _, -1, _, Size, Cont}   ->  Pool ! {get, self()},
+                                                                    receive
+                                                                        {ok, N} -> NewFd = N
+                                                                    end,
+                                                                    NFiles = lists:keyreplace(Name, 1, Files, {Name, NewFd, Pid, 0, Size, Cont}),
+                                                                    Next ! {{ok, io_lib:format("FD ~p", [NewFd])}, Pid, Count+1},
+                                                                    worker(NFiles, Pool, Next);
+                                 false                          ->  Next ! {{opn, Name}, Pid, Count+1};
+                                 _                              ->  Next ! {{error, ?F_OPEN}, Pid, Count+1}
+                              end;
+              {wrt, Fd, Size, Buff} -> case lists:keyfind(Fd, 2, Files) of
+                                         {Name, Fd, Pid, Cur, Sz, Cont} ->  NFiles = lists:keyreplace(Fd, 2, Files, {Name, Fd, Pid, Cur, Sz+Size, Cont ++ Buff}),
+                                                                            Next ! {{ok, ok}, Pid, Count+1},
+                                                                            worker(NFiles, Pool, Next);
+                                         false                          ->  Next ! {{wrt, Fd, Size, Buff}, Pid, Count+1};
+                                         _                              ->  Next ! {{error, ?F_CLOSED}, Pid, Count+1}
                                         end;
-              {r_rea, Fd, Size}      -> case lists:keysearch(Fd, 2, Files) of
-                                          {value, {Name, Fd, C_pid, Pos, Siz, Cont,D}}  ->  Check = Siz - Pos,
-                                                                                            case Check =< 0 of
-                                                                                              true  -> C_pid ! io_lib:format("OK SIZE 0 NULL~n",[]);
-                                                                                              false -> if
-                                                                                                        Check >= Size -> Available = Size;
-                                                                                                        true          -> Available = Check
-                                                                                                       end,
-                                                                                                       Read = string:sub_string(Cont, Pos+1, Pos+Available),
-                                                                                                       NewFiles = lists:keyreplace(Fd, 2, Files, {Name, Fd, C_pid, Pos+Available, Siz, Cont,D}),
-                                                                                                       C_pid ! io_lib:format("OK SIZE ~p ~p~n", [Available, Read]),
-                                                                                                       worker(NewFiles, Pool, Next)
-                                                                                            end;
-                                          {value, _}                                  -> C_pid ! ?F_CLOSED;
-%                                          {value, _}                                  -> C_pid ! io_lib:format("ERROR REA ENOTOPENEDBYCLIENT~n", []);
-                                          false                                       -> Next ! {{r_rea, Fd, Size}, C_pid, Count+1}
+              {rea, Fd, Size}      -> case lists:keyfind(Fd, 2, Files) of
+                                         {Name, Fd, Pid, Cur, Sz, Cont} -> Cond = (Size > 0) and (Cur < Sz),
+                                                                           case Cond of
+                                                                                false -> Next ! {{ok, ok}, Pid, Count+1};
+                                                                                true  -> Amount = min(Size, Sz - Cur),
+                                                                                         Buff = string:sub_string(Cont, Cur+1, Cur+Amount),
+                                                                                         NFiles = lists:keyreplace(Fd, 2, Files, {Name, Fd, Pid, Cur+Amount, Sz, Cont}),
+                                                                                         Next ! {{ok, io_lib:format("OK SIZE ~p ~p~n", [Amount, Buff])}, Pid, Count+1},
+                                                                                         worker(NFiles, Pool, Next)
+                                                                              end;
+                                          false                            -> Next ! {{rea, Fd, Size}, Pid, Count+1};
+                                          _                                -> Next ! {{error, ?F_CLOSED}, Pid, Count+1}
                                         end;
-              {r_clo, Fd}            -> case lists:keytake(Fd, 2, Files) of
-                                         {value, {Name, Fd, C_pid, _, Siz, Cont, 0}, NF} ->  Pool ! {free, Fd, self()},
-                                                                                             receive
-                                                                                               ok -> NewFiles = [{Name, 0, 0, 0, Siz, Cont, 0}|NF],
-                                                                                                     C_pid ! io_lib:format("OK~n", []),
+              {clo, Fd}             -> case lists:keytake(Fd, 2, Files) of
+                                         {value, {Name, _, Pid, _, Size, Cont}, NFiles} -> Pool ! {free, Fd, self()}, %ver self()
+                                                                                           receive
+                                                                                             ok   -> NewFiles = [{Name, -1, -1, 0, Size, Cont}|NFiles],
+                                                                                                     Next ! {{ok, ok}, Pid, Count+1},
                                                                                                      worker(NewFiles, Pool, Next);
-                                                                                                     fail -> C_pid ! ?BAD_FD,
-                                                                                                     worker(Files, Pool, Next)
-                                                                                             end;
-                                         {value, {Name,_, C_pid,_,_,_, 1}, NF}           ->  C_pid ! io_lib:format("~p: WAS PENDING TO DELETE. DELETED~n", [Name]),
-                                                                                             worker(NF, Pool, Next);
-                                         {value, _}                                      ->  C_pid ! ?F_CLOSED;
-%                                         {value, _}                                      ->  C_pid ! io_lib:format("ERROR CLO ENOTOPENEDBYCLIENT~n", []);
-                                         false                                           ->  Next ! {{r_clo, Fd}, C_pid, Count+1}
-                                       end
+                                                                                             fail -> Next ! {{error, ?BAD_FD}, Pid, Count+1}
+                                                                                           end;
+                                         {value, _}                                      ->  Next ! {{error, ?F_CLOSED}, Pid, Count+1}; %ver mas detalle
+                                         false                                           ->  Next ! {{clo, Fd}, Pid, Count+1}
+                                       end;
+              {ok, Msj}    -> Next ! {{ok, Msj}, Pid, Count+1};
+              {error, Msj} -> Next ! {{error, Msj}, Pid, Count+1}
             end,
     worker(Files, Pool, Next)
     end.
