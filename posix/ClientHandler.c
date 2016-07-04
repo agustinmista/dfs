@@ -44,7 +44,9 @@ void *handle_client(void *s){
         SEND2CLIENT(COLOR_YELLOW "dfs> " COLOR_RESET);
         
         if ((readed = read(client_id, buffer_in, MSG_SIZE)) <= 0){
+            #if defined(DEBUG) || defined(DEBUG_REQUEST)
             printf("DFS_SERVER: Client [id: %d] disconected.\n", client_id);
+            #endif
             break;
         }
         
@@ -121,7 +123,8 @@ void *handle_client(void *s){
 
     // Free everything
     if(req) free(req);
-    if(ans) free(ans);
+    // If ans is freed here it causes an error when a client window closes.
+    // It tries to free it again and the server crashes.
     free(s);
     
     return NULL;

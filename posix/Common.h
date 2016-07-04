@@ -18,8 +18,6 @@
 
 #include "FDPool.h"
 
-#define DEBUG_REQUEST 1
-
 #define ERROR(s)    exit((perror(s), -1))
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 

@@ -28,7 +28,11 @@ void *init_dispatcher(void *s){
     attr.mq_msgsize = MSG_SIZE;
     attr.mq_curmsgs = 0;
     
+    #if defined(DEBUG) || defined(DEBUG_REQUEST)
     printf("DFS_SERVER: Waiting for connections...\n");
+    #else
+    printf("DFS_SERVER: The server is ready!\n");
+    #endif
     
     // Enter dispatching loop
     while(1){
@@ -56,8 +60,10 @@ void *init_dispatcher(void *s){
         if (pthread_create(&new_client, NULL, handle_client, newSession) != 0)
                 ERROR("DFS_SERVER: Error creating pthread.\n");
 
+        #if defined(DEBUG) || defined(DEBUG_REQUEST)
         printf("DFS_SERVER: New client! [id: %d] [worker: %d]\n",
                newSession->client_id, newSession->worker_id);
+        #endif
 
     }
 

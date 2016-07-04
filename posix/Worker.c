@@ -12,11 +12,12 @@ pthread_mutex_t fd_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 
 // Print a request, used if DEBUG_REQUEST is enabled
+#ifdef DEBUG_REQUEST
 void print_request(int wid, Request *r) {
     printf("DFS_SERVER: New Request: [worker: %d] [id: %d] [op: %d] [external: %d] [arg0:'%s'] [arg1:'%s\'] [arg2:'%s']\n",
            wid, r->client_id, r->op, r->external, r->arg0, r->arg1, r->arg2);
 }
-
+#endif
 
 // Reply filling shortcut
 void fill_reply(Reply *ans, Error werror, char *wreply) {
@@ -182,7 +183,9 @@ void *worker(void *w_info) {
         if ((readed = mq_receive(wqueue[wid], buffer_in, MSG_SIZE+1, NULL)) >= 0) {
             request = (Request *) buffer_in;
             
-            if (DEBUG_REQUEST) print_request(wid, request);
+            #ifdef DEBUG_REQUEST
+            print_request(wid, request);
+            #endif
     
             files = files_init;
             
@@ -246,7 +249,9 @@ void *worker(void *w_info) {
                     else if (strcmp(request->arg1, "-2") == 0)
                         fill_reply(ans, F_NOTEXIST, NULL);
                     else {
+                        #if defined(DEBUG) || defined(DEBUG_REQUEST)
                         printf("DFS_SERVER: File deleted: [name: %s]\n", request->arg0);
+                        #endif
                         fill_reply(ans, NONE, NULL);
                     }
 
@@ -297,7 +302,9 @@ void *worker(void *w_info) {
                             } else {
                                 if (status == -1) fill_reply(ans, F_OPEN, NULL);
                                 else {
+                                    #if defined(DEBUG) || defined(DEBUG_REQUEST)
                                     printf("DFS_SERVER: File deleted: [name: %s]\n", request->arg0);
+                                    #endif
                                     fill_reply(ans, NONE, NULL);
                                 }
 
@@ -351,7 +358,9 @@ void *worker(void *w_info) {
                                 new -> next = files_init; 
                             }	
                             files_init = new;
+                            #if defined(DEBUG) || defined(DEBUG_REQUEST)
                             printf("DFS_SERVER: New file created: [name: %s] [fd: %d]\n", new->name, new->fd);
+                            #endif
                             fill_reply(ans, NONE, NULL);	
 
                         } else fill_reply(ans, F_EXIST, NULL);
@@ -465,7 +474,9 @@ void *worker(void *w_info) {
                                 asprintf(&aux, "FD %d", tmp);
                                 intern_request->arg1 = aux;
                             }
+                            #if defined(DEBUG) || defined(DEBUG_REQUEST)
                             printf("DFS_SERVER: File opened: [name: %s] [fd: %d]\n", request->arg0, tmp);
+                            #endif
                             SEND_REQ_MAIN(intern_request);
                             
                         }
@@ -511,7 +522,9 @@ void *worker(void *w_info) {
                                         strcat(files->content, " ");
                                         strcat(files->content, request->arg2);
                                         files->size = strlen(files->content);
+                                        #if defined(DEBUG) || defined(DEBUG_REQUEST)
                                         printf("DFS_SERVER: Content updated: [name: %s] [content: %s]\n", files->name, files->content);
+                                        #endif
                                         status = 0;
                                 } else
                                     status = -3;
