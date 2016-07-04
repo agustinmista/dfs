@@ -1,10 +1,17 @@
 #include "Common.h"
 #include "ClientHandler.h"
 
+#define COLOR_YELLOW  "\x1b[33m"
+#define COLOR_RED     "\x1b[31m"
+#define COLOR_GREEN   "\x1b[32m"
+#define COLOR_RESET   "\x1b[0m"
+
 #define SEND2CLIENT(fmt,...)    write(client_id, buffer_out, sprintf(buffer_out, fmt, ##__VA_ARGS__))
 #define SEND_REQ(request)       mq_send(worker_queue, (char *) request, sizeof(Request), 1)
 #define RECV_ANS()              mq_receive(client_queue, buffer_in, MSG_SIZE, NULL)
 
+
+// Check for a valid filename.
 int is_valid(char *s){
     if(strlen(s) == 1 && *s == '.') return 0;
     for(int i=0; i<strlen(s); i++) 
@@ -12,6 +19,8 @@ int is_valid(char *s){
     return 1;
 }
 
+
+// Handle the communication between a client and his assigned worker.
 void *handle_client(void *s){
     int identified = 0;
     int readed;
@@ -32,7 +41,7 @@ void *handle_client(void *s){
     // Client handle loop
     while(1){
         
-        SEND2CLIENT("dfs> ");
+        SEND2CLIENT(COLOR_YELLOW "dfs> " COLOR_RESET);
         
         if ((readed = read(client_id, buffer_in, MSG_SIZE)) <= 0){
             printf("DFS_SERVER: Client [id: %d] disconected.\n", client_id);
@@ -50,11 +59,11 @@ void *handle_client(void *s){
         else if(identified){
                 
             if (strlen(buffer_in) < 3)
-                SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
+                SEND2CLIENT(COLOR_RED "ERROR: BAD COMMAND\n" COLOR_RESET);
             else if(!strncmp(buffer_in, "CON", 3))
-                SEND2CLIENT("dfs> ERROR: ALREADY IDENTIFIED\n");    
+                SEND2CLIENT(COLOR_RED "ERROR: ALREADY IDENTIFIED\n" COLOR_RESET);    
             else if(!(req = parseRequest(session, buffer_in)))
-                SEND2CLIENT("dfs> ERROR: BAD COMMAND\n");
+                SEND2CLIENT(COLOR_RED "ERROR: BAD COMMAND\n" COLOR_RESET);
             
             // If the parser has generated a request, send it, wait for response and print results
             if(req){
@@ -69,34 +78,42 @@ void *handle_client(void *s){
                 switch(ans->err){
                     // If no errors, print ok + extra data depending on command
                     case NONE:
-                        if (req->op == OPN || req->op == REA || req->op == LSD) 
-                            SEND2CLIENT("dfs> OK: %s\n", ans->answer);
-                        else if(req->op == BYE) 
+                        if (req->op == LSD) { 
+                            SEND2CLIENT(COLOR_GREEN "OK: " COLOR_RESET);
+                            if (!strncmp(ans->answer, "", 1)) 
+                                SEND2CLIENT("NO FILES\n");
+                            else 
+                                SEND2CLIENT("%s\n", ans->answer);
+                        } else if (req->op == OPN || req->op == REA) { 
+                            SEND2CLIENT(COLOR_GREEN "OK: " COLOR_RESET);
+                            SEND2CLIENT(COLOR_RESET "%s\n", ans->answer);
+                        } else if (req->op == BYE) {
+                            SEND2CLIENT(COLOR_GREEN "BYE!\n" COLOR_RESET);
                             identified = !identified;
-                        else    
-                            SEND2CLIENT("dfs> OK\n");
+                        } else    
+                            SEND2CLIENT(COLOR_GREEN "OK\n" COLOR_RESET);
                         break;
                         
                     // Otherwise, print error
-                    case BAD_FD:     SEND2CLIENT("dfs> ERROR: BAD FD\n");                  break;
-                    case BAD_ARG:    SEND2CLIENT("dfs> ERROR: BAD ARG\n");                 break;
-                    case F_OPEN:     SEND2CLIENT("dfs> ERROR: FILE ALREADY OPEN\n");       break;                    
-                    case F_CLOSED:   SEND2CLIENT("dfs> ERROR: FILE IS CLOSED\n");          break;
-                    case F_EXIST:    SEND2CLIENT("dfs> ERROR: FILE ALREADY EXIST\n");      break;                    
-                    case F_NOTEXIST: SEND2CLIENT("dfs> ERROR: FILE NOT EXIST\n");          break;
-                    case F_NOTSPACE: SEND2CLIENT("dfs> ERROR: FILE: NOT ENOUGH SPACE\n");  break;
-                    case F_TOOMANY:  SEND2CLIENT("dfs> ERROR: TOO MANY OPEN FILES\n");     break;
-                    case NOT_IMP:    SEND2CLIENT("dfs> ERROR: COMMAND NOT IMPLEMENTED\n"); break;
+                    case BAD_FD:     SEND2CLIENT(COLOR_RED "ERROR: BAD FD\n" COLOR_RESET);                  break;
+                    case BAD_ARG:    SEND2CLIENT(COLOR_RED "ERROR: BAD ARG\n" COLOR_RESET);                 break;
+                    case F_OPEN:     SEND2CLIENT(COLOR_RED "ERROR: FILE ALREADY OPEN\n" COLOR_RESET);       break;                    
+                    case F_CLOSED:   SEND2CLIENT(COLOR_RED "ERROR: FILE IS CLOSED\n" COLOR_RESET);          break;
+                    case F_EXIST:    SEND2CLIENT(COLOR_RED "ERROR: FILE ALREADY EXIST\n" COLOR_RESET);      break;                    
+                    case F_NOTEXIST: SEND2CLIENT(COLOR_RED "ERROR: FILE NOT EXIST\n" COLOR_RESET);          break;
+                    case F_NOTSPACE: SEND2CLIENT(COLOR_RED "ERROR: FILE: NOT ENOUGH SPACE\n"  COLOR_RESET); break;
+                    case F_TOOMANY:  SEND2CLIENT(COLOR_RED "ERROR: TOO MANY OPEN FILES\n" COLOR_RESET);     break;
+                    case NOT_IMP:    SEND2CLIENT(COLOR_RED "ERROR: COMMAND NOT IMPLEMENTED\n" COLOR_RESET); break;
                 }
 
             }
             
-            
         } else if(!strncmp(buffer_in, "CON", 3)) {
             identified = 1;
-            SEND2CLIENT("dfs> OK ID %d\n", client_id); 
+            SEND2CLIENT(COLOR_GREEN "OK: " COLOR_RESET); 
+            SEND2CLIENT("ID %d\n", client_id); 
         } else
-            SEND2CLIENT("dfs> ERROR NOT IDENTIFIED\n");
+            SEND2CLIENT(COLOR_RED "ERROR NOT IDENTIFIED\n" COLOR_RESET);
     }
     
     // Close message queue
@@ -111,6 +128,8 @@ void *handle_client(void *s){
 }
 
 
+
+// Parse a string into a Request structure, return NULL if something went wrong.
 Request *parseRequest(Session *s, char *cmd){
     char *saveptr;
     char *token_size;

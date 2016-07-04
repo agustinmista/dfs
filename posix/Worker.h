@@ -1,12 +1,13 @@
 #ifndef __WORKER_H__
 #define __WORKER_H__
-#endif
 
-#define n_Files_Worker 5
-#define INIT_FD 5
+// Initialize workers
+int init_workers();
 
-
+// Main worker function
 pthread_t workers[N_WORKERS];
+
+// Global worker message queues
 mqd_t worker_queues[N_WORKERS];
 
-int init_workers();
+#endif

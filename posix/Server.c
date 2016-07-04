@@ -4,11 +4,14 @@
 
 int main(int argc, char **argv){
     
+    // Parse linstening por from argv, if present
     int port = argc == 2 ? atoi(argv[1]) : 8000;    
+    
     int sock;
 	struct sockaddr_in server_address;
     pthread_t dispatcher;
     
+    // Disable stdout buffering
     setbuf(stdout, NULL);
     
     // Initialize and set listener socket

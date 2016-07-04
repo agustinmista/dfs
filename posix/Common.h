@@ -1,6 +1,6 @@
 #ifndef __COMMON_H__
 #define __COMMON_H__
-#endif
+
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -18,16 +18,25 @@
 
 #include "FDPool.h"
 
+#define DEBUG_REQUEST 1
+
 #define ERROR(s)    exit((perror(s), -1))
+#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
 #define N_WORKERS       5
-#define MAX_MESSAGES    10
-#define MAX_FILES       10
-#define MAX_OPEN_FILES  3
+#define MAX_MESSAGES    50
+#define MAX_FILES       50
+#define INIT_FD         100
+#define MAX_OPEN_FILES  10
 #define MSG_SIZE        1024
-#define F_NAME_SIZE     32
+#define F_NAME_SIZE     64
 #define F_CONTENT_SIZE  4096
+#define n_Files_Worker  5
 
+
+/*
+*   Supported operations
+*/
 typedef enum _Operation {
     LSD,
     DEL,
@@ -36,9 +45,12 @@ typedef enum _Operation {
     WRT,
     REA,
     CLO,
-    BYE         
+    BYE
 } Operation;
 
+/*
+*   Operation errors
+*/
 typedef enum _Error {
     NONE,
     BAD_FD,
@@ -52,6 +64,9 @@ typedef enum _Error {
     NOT_IMP
 } Error;
 
+/*
+*   User sessions
+*/
 typedef struct _Session {
 	int client_id;
 	int worker_id;
@@ -59,16 +74,22 @@ typedef struct _Session {
 	mqd_t *client_queue;
 } Session;
 
+/*
+*   Files
+*/
 typedef struct _File {
 	char *name;
-	int fd;            
+	int fd;
 	int open;      // -1 if closed, client_id otherwise
 	int cursor;
 	int size;
     char *content;
-	struct _File *next;	
+	struct _File *next;
 } File;
 
+/*
+*   Workers information
+*/
 typedef struct _Worker_Info {
 	int id;
 	mqd_t *queue;
@@ -77,24 +98,25 @@ typedef struct _Worker_Info {
 } Worker_Info;
 
 /*
-* 
-* Estructura para comunicar los pedidos de los clientes entre cada
-* handler y su proceso worker asignado y entre los distintos workers.
-* 
+*   Requests between clients and workers
 */
-
 typedef struct _Request {
-	Operation op; 		//Enum de operaciones: LSD, DEL, CRE, OPN, WRT, REA, CLO, BYE
-	int external; 		//0 request internas, 1 request externa
-	int main_worker; 	//worker que recibió el request externo y debe responder
-	char *arg0;			
+	Operation op;
+	int external; 		// != 0 if external request
+	int main_worker; 	//worker who received the external request
+	char *arg0;
 	char *arg1;
 	char *arg2;
-	int client_id;		    //ID del cliente que inició el request - necesario?
-	mqd_t *client_queue;	//Puntero a la cola del cliente	-> ver sin puntero
+	int client_id;
+	mqd_t *client_queue;
 } Request;
 
+/*
+*  Answers from workers to clients 
+*/
 typedef struct _Reply {
 	Error err;
 	char *answer;
 } Reply;
+
+#endif

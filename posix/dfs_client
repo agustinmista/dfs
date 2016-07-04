@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Cliente de telnet para conectarse al servidor DFS
+# Sintaxis:
+# ./dfs_client [PORT] [ESC_CHAR]
+
 DEF_ECHR=+
 DEF_PORT=8000
 

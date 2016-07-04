@@ -2,6 +2,8 @@
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
+
+// Create a FDPool with size elements
 FDPool *createFDPool(int size){
     FDPool *newPool = malloc(sizeof(FDPool));
     newPool->arr = malloc((size/8)+1);
@@ -11,6 +13,8 @@ FDPool *createFDPool(int size){
     return newPool;
 }
 
+
+// Print an FDPool status (with colours!)
 void printFDPool(FDPool *pool){    
     for(int i=0; i<pool->size; i++){
         if(IS_SET(pool->arr, i))       
@@ -21,6 +25,8 @@ void printFDPool(FDPool *pool){
     printf("|\n");
 }
 
+
+// Find a new FD from pool, return -1 if full
 int newFD(FDPool *pool){
     int i=0;
     
@@ -35,6 +41,8 @@ int newFD(FDPool *pool){
     } else return -1;
 }
 
+
+// Remove an FD from pool
 int freeFD(FDPool *pool, int fd){
     CLEAR(pool->arr, fd);
     return -1;
