@@ -1,14 +1,12 @@
-\documentclass[a4paper,10pt]{article}
+\documentclass[a4paper,12pt]{article}
 \usepackage[utf8]{inputenc}
 \usepackage{fancyhdr, float, graphicx, caption}
 \usepackage{amsmath, amssymb}
 \usepackage{bm}
 \usepackage[margin=1in]{geometry}
 \usepackage{multicol}
-\usepackage{proof}
 \usepackage{titlesec} 
 
-\setlength{\inferLineSkip}{4pt}
 
 \titleformat{\subsection}[runin]
   {\normalfont\large\bfseries}{\thesubsection}{1em}{}	
@@ -21,7 +19,7 @@
 \renewcommand\abstractname{\textit{Abstract}}
 
 \fancyhf{}
-\fancyhead[LE,RO]{\textit{Lenguaje Interpretado Simple}}
+\fancyhead[LE,RO]{\textit{DFS Server}}
 \fancyfoot[RE,CO]{\thepage}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -38,13 +36,13 @@
 		\textsc{Universidad Nacional de Rosario}\\	
 		\textsc{Facultad de Ciencias Exactas, Ingeniería y Agrimensura}\\
 		\textit{Licenciatura en Ciencias de la Computación}\\
-		\textit{Estructuras de datos y algoritmos II}\\
+		\textit{Sistemas Operativos I}\\
 	% Título
 	\vspace{30pt}
 	\hrule{}
 	\vspace{15pt}
 	\huge
-		\textbf{Lenguaje Interpretado Simple}\\
+		\textbf{Sistema de archivos distribuído}\\
 	\vspace{15pt}
 	\hrule{}
 	\vspace{30pt}
@@ -54,273 +52,30 @@
 		\large
 			\textbf{Alumnos:}\\
 		\normalsize
-			CRESPO, Lisandro (C-6165/4) \\
+			BORRERO, Paula (P-????)\\
+			IVALDI, Ángela (I-????)\\
 			MISTA, Agustín (M-6105/1) \\
-			$\;$ \\
-			$\;$ \\
 	\raggedleft
 		\large
 			\textbf{Docentes:}\\
 		\normalsize
-			JASKELIOFF, Mauro\\
-			RABASEDAS, Juan Manuel\\
-			SIMICH, Eugenia\\
-			MANZINO, Cecilia\\
+			MACHI, Guido\\
+			GRINBLAT, Guillermo\\
+			DIAZ, José Luis\\
 	\end{multicols}
 }
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{document}
-\date{28 de Agosto de 2015}
+\date{4 de Julio de 2016}
 \maketitle
 
 \pagebreak
 %----------------------------------------------------------
-\subsection*{Ejercicio 2.2.1.} 
-	\emph{Extendemos la sintaxis abstracta y concreta de las expresiones enteras del LIS
-	a modo de incluir el operador de asignación ternario del lenguaje C.}
-	\\
-	\\
-	\textbf{Sintaxis abstracta}
-	\begin{alignat*}{3}
-		\langle intexp \rangle\ ::&= \langle nat \rangle\ |\ \langle &&var \rangle\ &&|\ {-u}\ \langle intexp \rangle \\
-		&|\;\langle intexp  \rangle  &&\;{+}      &&\langle intexp \rangle\\
-		&|\;\langle intexp  \rangle  &&\;{-b}     &&\langle intexp \rangle\\
-		&|\;\langle intexp  \rangle  &&\;{\times} &&\langle intexp \rangle\\
-		&|\;\langle intexp  \rangle  &&\;{\div}   &&\langle intexp \rangle\\
-		&|\;\langle boolexp \rangle  &&\;{?}      &&\langle intexp \rangle \;:\; \langle intexp \rangle \\
-	\end{alignat*}
-	\textbf{Sintaxis concreta}
-	\begin{alignat*}{4}
-		\langle intexp \rangle\ ::&= \;&&\langle nat \rangle\\
-		&| &&\langle var \rangle \\
-		&| &&\bm{`-`}\;\langle intexp \rangle\\
-		&| &&\langle intexp \rangle \; \bm{`+`}\; \langle intexp \rangle\\
-		&| &&\langle intexp \rangle \; \bm{`-`}\; \langle intexp \rangle\\
-		&| &&\langle intexp \rangle \; \bm{`*`}\; \langle intexp \rangle\\
-		&| &&\langle intexp \rangle \; \bm{`/`}\; \langle intexp \rangle\\
-		&| &&\bm{`(`}\;\langle intexp \rangle\;\bm{`)`}\\
-		&| &&\langle boolexp \rangle\;\bm{`?`}\;\langle intexp \rangle\;\bm{`:`}\; \langle intexp \rangle \\
-	\end{alignat*}
-	\\
-%----------------------------------------------------------
-\subsection*{Ejercicio 2.3.1.}
-	\emph{Extendemos la sintaxis abstracta de las expresiones enteras en Haskell para incluir el operador de asignación ternario descripto en el Ejercicio 2.2.1.}
-	\\
-	\begin{alignat*}{3}
-	data IntExp=&\;Const\;     &&Int\\
-	    		&|\;Var\;      &&Variable\\
-				&|\;UMinus\;\; &&IntExp\\
-				&|\;Plus\;     &&IntExp\;     &&IntExp\\
-				&|\;Minus\;    &&IntExp\;     &&IntExp\\
-				&|\;Times\;    &&IntExp\;     &&IntExp\\
-				&|\;Div\;      &&IntExp\;     &&IntExp\\
-				&|\;IfAss\;    &&BoolExp\;\;  &&IntExp\;\; IntExp\\
-	\end{alignat*}
-\\
-\subsection*{Ejercicio 2.4.1.}
-	\emph{Extendemos la semántica denotacional de las expresiones enteras para incluir el operador ternario descripto en el Ejercicio 2.2.1}
-	\\
-	\begin{align*}
-		[\![ cond\;?\; expT\;:\;expF ]\!]_{intexp}\sigma = 
-		\begin{cases} 
-			[\![expT]\!]_{intexp}\sigma &\mbox{si } [\![cond]\!]_{boolexp}\sigma = \textbf{true} \\
-			[\![expF]\!]_{intexp}\sigma &\mbox{si } [\![cond]\!]_{boolexp}\sigma = \textbf{false} \\
-		\end{cases}
-	\end{align*}
-\pagebreak
-%----------------------------------------------------------
-\subsection*{Ejercicio 2.5.1.}
-	\emph{Para demostrar que la relación de evaluación de un paso $\rightsquigarrow$ es determinista, debemos probar que si:
-	\begin{align*} 
-		t \rightsquigarrow t'  \quad \text{y} \quad 
-		t \rightsquigarrow t'' \quad \text{entonces}  
-		\quad t' = t'' 
-	\end{align*}
-	Para esto, hacemos inducción estructural sobre la estructura de $\rightsquigarrow$}
-	\\
-	\\
-	\underline{\bf Casos Base:}
-	\begin{itemize}
-		\item La última regla aplicada para $t \rightsquigarrow t'$ fue {\bf ASS}, entonces tenemos que:
-				\begin{align*} t = \langle v:=e \;|\; \sigma\rangle \end{align*}
-			y resulta, por la forma de t, que no se puede haber aplicado ninguna otra regla para $t \rightsquigarrow t''$ por lo que se concluye que $t'= t''$.
-			\\
-		\item La última regla aplicada para $t \rightsquigarrow t'$ fue {\bf SKIP}, entonces tenemos que:
-				\begin{align*} t = \langle \textbf{skip} \;|\; \sigma\rangle \end{align*}
-			y resulta, por la forma de t, que no se puede haber aplicado ninguna otra regla para $t \rightsquigarrow t''$ por lo que se concluye que $t'= t''$.
-			\\
-		\item La última regla aplicada para $t \rightsquigarrow t'$ fue ${\bf IF_{1}}$, entonces tenemos que:
-				\begin{align*} t = \langle \textbf{if}\; b \;\textbf{then}\; c_{0} \;\textbf{else}\; c_{1} \;|\; \sigma\rangle \end{align*}
-			y se tiene por hipótesis que: 
-				\begin{align*} [\![b]\!]_{boolexp}\sigma = \textbf{true} \end{align*}
-			Luego, resulta por la forma de t, que para $t \rightsquigarrow t''$ sólo se pueden haber aplicado ${\bf IF_{1}}$ o bien ${\bf IF_{2}}$.
-			Si se hubiera aplicado ${\bf IF_{2}}$ entonces tenemos que:
-				\begin{align*} [\![b]\!]_{boolexp}\sigma = \textbf{false} \end{align*}
-			lo que contradice nuestra hipótesis, por ende, en $t' \rightsquigarrow t''$ sólo se puede haber aplicado ${\bf IF_{1}}$, concluyendo que $t'= t''$.
-			\\
-		\item La última regla aplicada para $t \rightsquigarrow t'$ fue ${\bf IF_{2}}$, entonces tenemos que:
-				\begin{align*} t = \langle \textbf{if}\; b \;\textbf{then}\; c_{0} \;\textbf{else}\; c_{1} \;|\; \sigma\rangle \end{align*}
-			y se tiene por hipótesis que: 
-				\begin{align*} [\![b]\!]_{boolexp}\sigma = \textbf{false} \end{align*}
-			Luego, resulta por la forma de t, que para $t \rightsquigarrow t''$ sólo se pueden haber aplicado ${\bf IF_{2}}$ o bien ${\bf IF_{1}}$.
-			Si se hubiera aplicado ${\bf IF_{1}}$ entonces tenemos que:
-				\begin{align*} [\![b]\!]_{boolexp}\sigma = \textbf{true} \end{align*}
-			lo que contradice nuestra hipótesis, por ende, en $t' \rightsquigarrow t''$ sólo se puede haber aplicado ${\bf IF_{2}}$, concluyendo que $t'= t''$.
-			\\
-\pagebreak
-		\item La última regla aplicada para $t \rightsquigarrow t'$ fue ${\bf WHILE_{1}}$, entonces tenemos que:
-				\begin{align*} t = \langle \textbf{while}\; b \;\textbf{do}\; c \;|\; \sigma\rangle \end{align*}
-			y se tiene por hipótesis que:
-				\begin{align*} [\![b]\!]_{boolexp}\sigma = \textbf{true} \end{align*}
-			Luego, resulta por la forma de t, que para $t \rightsquigarrow t''$ sólo se pueden haber aplicado ${\bf WHILE_{1}}$ o bien ${\bf WHILE_{2}}$.
-			Si se hubiera aplicado ${\bf WHILE_{2}}$ entonces tenemos que:
-				\begin{align*} [\![b]\!]_{boolexp}\sigma = \textbf{false} \end{align*}
-			lo que contradice nuestra hipótesis, por ende, en $t' \rightsquigarrow t''$ sólo se puede haber aplicado ${\bf WHILE_{1}}$, concluyendo que $t'= t''$.
-			\\
-		\item La última regla aplicada para $t \rightsquigarrow t'$ fue ${\bf WHILE_{2}}$, entonces tenemos que:
-				\begin{align*} t = \langle \textbf{while}\; b \;\textbf{do}\; c \;|\; \sigma\rangle \end{align*}
-			y se tiene por hipótesis que:
-				\begin{align*} [\![b]\!]_{boolexp}\sigma = \textbf{false} \end{align*}
-			Luego, resulta por la forma de t, que para $t \rightsquigarrow t''$ sólo se pueden haber aplicado ${\bf WHILE_{2}}$ o bien ${\bf WHILE_{1}}$.
-			Si se hubiera aplicado ${\bf WHILE_{1}}$ entonces tenemos que:
-				\begin{align*} [\![b]\!]_{boolexp}\sigma = \textbf{true} \end{align*}
-			lo que contradice nuestra hipótesis, por ende, en $t' \rightsquigarrow t''$ sólo se puede haber aplicado ${\bf WHILE_{2}}$, concluyendo que $t'= t''$.
-			\\
-	\end{itemize}
-	\underline{\bf Paso Inductivo:}
-	\begin{itemize}
-		\item Supongo que la última regla aplicada para $t \rightsquigarrow t'$ fue ${\bf SEQ_{1}}$, entonces tenemos que:
-				\begin{align*} t = \langle c_{0} \;\textbf{;}\; c_{1} \;|\; \sigma\rangle \end{align*}
-			y tenemos por hipótesis inductiva que:
-				\begin{align*} \langle c_{0},\sigma\rangle \rightsquigarrow \sigma' \quad \Rightarrow \quad \nexists x \neq \sigma' \;{\big /}\; \langle c_{0},\sigma\rangle \rightsquigarrow x \end{align*}
-			Cuyo antecedente es válido dado que es la premisa de la regla que aplicamos, por lo que podemos concluir que vale el consecuente de la misma. Luego, resulta por la forma de t, que para $t \rightsquigarrow t''$ sólo se pueden haber aplicado ${\bf SEQ_{1}}$ o bien ${\bf SEQ_{2}}$.
-			Si se hubiera aplicado ${\bf SEQ_{2}}$ entonces tenemos que:
-				\begin{align*} \langle c_{0},\sigma\rangle \rightsquigarrow \langle c_{0}'',\sigma'' \rangle \end{align*}
-			lo que contradice el consecuente de nuestra hipótesis ($\sigma' \neq \langle c_{0}'',\sigma'' \rangle$), por ende, en $t' \rightsquigarrow t''$ sólo se puede haber aplicado ${\bf SEQ_{1}}$, concluyendo que $t'= t''$.
-			\\
-			\item Supongo que la última regla aplicada para $t \rightsquigarrow t'$ fue ${\bf SEQ_{2}}$, entonces tenemos que:
-				\begin{align*} t = \langle c_{0} \;\textbf{;}\; c_{1} \;|\; \sigma\rangle \end{align*}
-			y tenemos por hipótesis inductiva que:
-				\begin{align*} \langle c_{0},\sigma\rangle \rightsquigarrow \langle c_{1}' \;|\; \sigma' \rangle \quad \Rightarrow \quad \nexists x \neq \langle c_{1}' \;|\; \sigma' \rangle \;{\big /}\; \langle c_{0},\sigma\rangle \rightsquigarrow x \end{align*}
-			Cuyo antecedente es válido dado que es la premisa de la regla que aplicamos, por lo que podemos concluir que vale el consecuente de la misma. Luego, resulta por la forma de t, que para $t \rightsquigarrow t''$ sólo se pueden haber aplicado ${\bf SEQ_{2}}$ o bien ${\bf SEQ_{1}}$.
-			Si se hubiera aplicado ${\bf SEQ_{1}}$ entonces tenemos que:
-				\begin{align*} \langle c_{0},\sigma\rangle \rightsquigarrow \sigma'' \end{align*}
-			lo que contradice el consecuente de nuestra hipótesis ($ \langle c_{0}',\sigma' \rangle \neq \sigma''$), por ende, en $t' \rightsquigarrow t''$ sólo se puede haber aplicado ${\bf SEQ_{2}}$, concluyendo que $t'= t''$.
-	\end{itemize}
+\section*{Introducción}
 	
-	\vspace{5pt}
-	\emph{Finalmente, podemos concluir que \textbf{la relación de evaluación en un paso $\rightsquigarrow$ es determinista.}}
-	\\
-%----------------------------------------------------------
-\subsection*{Ejercicio 2.5.2.}
-	\emph{Construimos un árbol de prueba para demostrar que:}
-	\\
-	\begin{align*}
-		\langle x:= x+1;\;{\bf if}\; x>0\;{\bf then\;skip\;else}\; x:=x-1, [\sigma|x:0]\rangle \rightsquigarrow^*[\sigma|x:1]
-	\end{align*}
-	\\
-	% raíz
-	\begin{align*}
-		\infer[TR2]{
-			\langle x:= x+1;\;{\bf if}\; x>0\;{\bf then\;skip\;else}\; x:=x-1, [\sigma|x:0]\rangle \rightsquigarrow^*[\sigma|x:1]
-		}{
-			(1)\qquad \qquad \qquad & \qquad \qquad \qquad(2)
-		}
-	\end{align*}
-	% eq (1)
-	\begin{align}
-		\infer[TR1]{
-			\langle x:= x+1;\;{\bf if}\; x>0\;{\bf then\;skip\;else}\; x:=x-1, [\sigma|x:0]\rangle \rightsquigarrow^* \langle {\bf if}\; x>0\;{\bf then\;skip\;else}\; x:=x-1, [\sigma|x:1]\rangle
-		}{
-			\infer[SEQ1]{
-				\langle x:= x+1;\;{\bf if}\; x>0\;{\bf then\;skip\;else}\; x:=x-1, [\sigma|x:0]\rangle \rightsquigarrow \langle {\bf if}\; x>0\;{\bf then\;skip\;else}\; x:=x-1, [\sigma|x:1]\rangle
-			}{
-				\infer[ASS^{(3)}]{
-					\langle x:= x+1, [\sigma|x:0] \rangle \rightsquigarrow [\sigma|x:1]
-				}{
-				}
-			}
-		}
-	\end{align}
-	% eq (2)
-	\begin{align}
-		\infer[TR2]{
-			\langle {\bf if}\; x>0\;{\bf then\;skip\;else}\; x:=x-1, [\sigma|x:1]\rangle \rightsquigarrow^* [\sigma|x:1]
-		}{
-			\infer[TR1]{
-				\langle {\bf if}\; x>0\;{\bf then\;skip\;else}\; x:=x-1, [\sigma|x:1]\rangle \rightsquigarrow^* \langle {\bf skip}, [\sigma|x:1]\rangle
-			}{
-				\infer[IF1]{
-					\langle {\bf if}\; x>0\;{\bf then\;skip\;else}\; x:=x-1, [\sigma|x:1]\rangle \rightsquigarrow \langle {\bf skip}, [\sigma|x:1]\rangle
-				}{
-					[\![x>0]\!][\sigma|x:1] = {\bf true}^{(4)}
-				}
-			} & \qquad
-			\infer[TR1]{
-				\langle {\bf skip}, [\sigma|x:1]\rangle \rightsquigarrow^* [\sigma|x:1]
-			}{
-				\infer[SKIP]{
-					\langle {\bf skip}, [\sigma|x:1]\rangle \rightsquigarrow [\sigma|x:1]
-				}{
-				}
-			}
-		}
-	\end{align}
-	\\
-	\\
-	% pruebas de semántica
-	\emph{Además, probamos que:}
-	\begin{alignat}{3}
-		[\![x+1]\!][\sigma|x:0] \quad &= \quad [\![x]\!][\sigma|x:0] + [\![1]\!][\sigma|x:1] \quad &&= \quad 0+1 \quad &&= \quad {\bf 1}\\
-	  	[\![x>0]\!][\sigma|x:1] \quad &= \quad [\![x]\!][\sigma|x:1] > [\![0]\!] \quad &&= \quad 1>0 \quad &&= \quad {\bf true}
-	\end{alignat}
-	\\
-%----------------------------------------------------------
-\subsection*{Ejercicio 2.5.6.}
-	\emph{Agregamos una producción a la gramática abstracta de los comandos del LIS para el comando {\bf repeat}}
-	\\
-	\begin{alignat*}{3}
-		\langle comm \rangle\ ::&= {\bf skip} \\
-			&|\;\langle var  \rangle  \;{:=}\;\langle intexp \rangle\\
-			&|\;\langle comm \rangle  \;{;}\;\langle comm \rangle\\
-			&|\;{\bf if}\;\langle boolexp \rangle\;{\bf then}\;\langle comm \rangle\;{\bf else}\;\langle comm \rangle\\
-			&|\;{\bf while}\;\langle boolexp \rangle\;{\bf do}\;\langle comm \rangle\\
-			&|\;{\bf repeat}\;\langle comm \rangle\;{\bf until}\;\langle boolexp \rangle
-	\end{alignat*}
-\pagebreak
-	\\
-	\emph{Extendemos la semántica operacional del LIS con reglas de inferencia para el comando {\bf repeat}}
-	\\
-	\begin{align*}
-		\infer[REP1]{
-			\langle {\bf repeat}\; c\;{\bf until}\; b,\;\sigma\rangle \rightsquigarrow \langle c; {\bf repeat}\; c\;{\bf until}\; b,\;\sigma'\rangle
-		}{
-			\langle c, \sigma\rangle \rightsquigarrow \sigma'
-			\qquad & \qquad 
-			[\![b]\!]_{boolexp}\sigma' = {\bf false} 
-		}
-	\end{align*}
-	\\
-	\begin{align*}
-		\infer[REP2]{
-			\langle {\bf repeat}\; c\;{\bf until}\; b,\;\sigma\rangle \rightsquigarrow \sigma'
-		}{
-			\langle c, \sigma\rangle \rightsquigarrow \sigma'
-			\quad & \quad  
-			[\![b]\!]_{boolexp}\sigma' = {\bf true} 
-		}
-	\end{align*}
-\\
-\vspace{\fill}
-\begin{multicols}{2}
-	\hrule
-	\vspace{5pt}
-	CRESPO, Lisandro \\
-	\linebreak
-
-	\hrule
-	\vspace{5pt}
-	MISTA, Agustín \\
-\end{multicols}
-
+	Un servidor de archivos distribuido es un componente de software que le ofrece al usuario final las operaciones necesarias para trabajar con un sistema de archivos virtual, aparentemente centralizado, donde todos los archivos parecen estar en una misma ubicación, cuando en realidad es probable que los mismos estén dispersos en varias unidades de disco, o más aun, en varias computadoras.
+	
+	En éste informe analizaremos las implementaciones tanto en \textbf{C}  como en \textbf{Erlang} de un servidor de archivos distribuido simple, esto incluye profundizar sobre algunas cuestiones de diseño tales como comunicación entre hilos, concurrencia y performance.
+	
+	
 \end{document}
