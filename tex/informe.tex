@@ -84,17 +84,17 @@
     \begin{itemize}
     \item Session: representa las sesiones. Contiene datos que relacionan un cliente con su respectivo worker, seleccionado de forma aleatoria por el dispatcher cuando se conecta.
     \item Request: se usa para modelizar los pedidos a workers. Si el campo external (int) es distinto de 0, el pedido proviene del handler, en otro caso, proviene de otro worker.
-    \item Reply representa las respuestas del worker al handler. Contiene dos campos uno de tipo Error (representa errores al procesar un comando) si no hay errores es NONE, y el otro campo sirve para agregar informacion extra sobre el resultado.
-    \item File: Los archivos se representan
+    \item Reply: representa las respuestas del worker al handler. Contiene dos campos uno de tipo Error (representa errores al procesar un comando) si no hay errores es NONE, y el otro campo sirve para agregar informacion extra sobre el resultado.
+    \item File: modela cada archivo.
     \item Worker\_Info: permite guardar datos de cada worker, entre ellos: sus archivos, identificador, cola de mensajes y pool de descriptores de archivos.
     \end{itemize}
     
     \subsection*{Módulos\\}
     \begin{itemize}
-    \item Server: Inicializa la conexión TCP, el dispatcher y los workers.
+    \item Server: inicializa la conexión TCP, el dispatcher y los workers.
     \item Dispatcher: espera por nuevas conexiones, y cuando ocurre alguna, se ocupa de crear una sesion (session) y lanzar un handler.
     \item ClientHandler: se encarga de parsear lo que recibe de cada cliente, lo convierte en un external request y se lo manda al worker correspondiente. Cuando recibe una respuesta(reply) de algun worker, la procesa y muestra el resultado a cliente (de manera que lo entienda).
-    \item Worker: recibe del handler o de otros workers diferentes peticiones, las cuales intenta llevar a cabo. Opera sobre sus archivos cuando es necesario. Para optimizar las operaciones, no es necesario que una peticion pase por todos los workers. El primero que pueda llevarla a cabo, lo hara y contestará al handler correspondiente.
+    \item Worker: recibe del handler o de otros workers diferentes peticiones, las cuales intenta llevar a cabo. Opera sobre sus archivos cuando es necesario. Para optimizar las operaciones, no es necesario que una peticion pase por todos los workers. El primero que pueda llevarla a cabo, lo hará y contestará al handler correspondiente.
     \end{itemize}
     Para mostrar los mensajes del servidor se usaron banderas de compilación condicional. Con la bandera DEBUG, se muestran mensajes de estado del servidor. Con DEBUG\_REQUEST podremos ver también la comunicación entre workers.
     
@@ -104,5 +104,5 @@
     Cada archivo es representado mediante una tupla de la forma \{Name, Fd, Opener, Cursor, Size, Content\} y el conjunto de archivos de cada worker es una lista de tuplas de ese tipo.
 
 \section*{Característica adicional}
-    Implentamos en Erlang el punto adicional de mensajería tolerante a fallas (con timeout). Luego de 300 milisegundos se lanza el error: ERROR 62 ETIME. 
+    Implementamos en Erlang el punto adicional de mensajería tolerante a fallas (con timeout). Luego de 300 milisegundos se lanza el error: ERROR 62 ETIME. 
 \end{document}
