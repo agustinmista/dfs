@@ -96,12 +96,12 @@
     \item ClientHandler: se encarga de parsear lo que recibe de cada cliente, lo convierte en un external request y se lo manda al worker correspondiente. Cuando recibe una respuesta(reply) de algun worker, la procesa y muestra el resultado a cliente (de manera que lo entienda).
     \item Worker: recibe del handler o de otros workers diferentes peticiones, las cuales intenta llevar a cabo. Opera sobre sus archivos cuando es necesario. Para optimizar las operaciones, no es necesario que una peticion pase por todos los workers. El primero que pueda llevarla a cabo, lo hara y contestará al handler correspondiente.
     \end{itemize}
-    Para mostrar los mensajes del servidor se usaron banderas de compilación condicional. Con la bandera DEBUG, se muestran mensajes de estado del servidor. Con DEBUG\_REQUEST podremos ver también la comunicación entre workers.\\
+    Para mostrar los mensajes del servidor se usaron banderas de compilación condicional. Con la bandera DEBUG, se muestran mensajes de estado del servidor. Con DEBUG\_REQUEST podremos ver también la comunicación entre workers.
     
 \section*{Implementación en Erlang}
     En este caso los workers forman un anillo similar a la versión de C. La diferencia es que cuando un handler manda una petición a su worker designado sólo le responde el mismo (no hay optimizacion). Si se resuelve la petición antes de llegar al origen (exitósamente o con error) se propaga la respuesta hasta que llegue al origen. Si se da toda la vuelta sin resolver la petición se retorna error. Cada worker conserva sus archivos, su pool de file descriptors y el pid del siguiente worker. Cada uno recibe mensajes de la forma {Req, Pid, Count}, donde Req representa a los comandos y argumentos, el Pid del cliente solicitante y un contador de saltos, que al llegar a ?N\_WORKERS indica que se dió toda la vuelta.
     El handler se divide en dos funciones, una cuando el cliente todavía no hizo CON handle\_client y otra para recibir los comandos una vez que está identificado.\\
-    Cada archivo es representado mediante una tupla de la forma \{Name, Fd, Opener, Cursor, Size, Content\} y el conjunto de archivos de cada worker es una lista de tuplas de ese tipo.\\
+    Cada archivo es representado mediante una tupla de la forma \{Name, Fd, Opener, Cursor, Size, Content\} y el conjunto de archivos de cada worker es una lista de tuplas de ese tipo.
 
 \section*{Característica adicional}
     Implentamos en Erlang el punto adicional de mensajería tolerante a fallas (con timeout). Luego de 300 milisegundos se lanza el error: ERROR 62 ETIME. 
