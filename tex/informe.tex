@@ -107,7 +107,7 @@
     
 \section*{Implementación en Erlang}
     En este caso los workers forman un anillo similar a la versión de C. La diferencia es que siempre se realiza toda la vuelta (no hay optimización). Si se resuelve la petición antes de llegar al origen (exitosamente o con error) se propaga la respuesta hasta que llegue al origen. Si se da toda la vuelta sin resolver la petición se retorna error.\\
-    Cada worker conserva sus archivos, su pool de descriptores de archivo y el pid del siguiente worker en el anillo. Cada uno recibe mensajes de la forma {Req, Pid, Count}, donde Req representa a los comandos y argumentos, Pid es el PID del cliente solicitante y Count es un contador de saltos, que al llegar al número total de workers (\textit{?N\_WORKERS}) indica que se dió toda la vuelta.\\
+    Cada worker conserva sus archivos, su pool de descriptores de archivo y el pid del siguiente worker en el anillo. Cada uno recibe mensajes de la forma \{Req, Pid, Count\}, donde Req representa a los comandos y argumentos, Pid es el PID del cliente solicitante y Count es un contador de saltos, que al llegar al número total de workers (\textit{?N\_WORKERS}) indica que se dió toda la vuelta.\\
     El handler se divide en dos funciones, handle\_unlogged se ocupa de conectar al cliente (\textit{CON}) y handle\_logged se ocupa del resto de las peticiones una vez que se tiene un identificador de cliente.\\
     Cada archivo es representado mediante una tupla de la forma \{Name, Fd, Opener, Cursor, Size, Content\} y el conjunto de archivos de cada worker es una lista de tuplas de ese tipo.
 
