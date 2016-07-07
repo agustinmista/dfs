@@ -45,7 +45,7 @@ dispatcher(ListenerSocket, ClientId, Workers)->
     case gen_tcp:accept(ListenerSocket) of
         {ok, Socket}    ->  WorkerId = random:uniform(?N_WORKERS),
                             io:format("DFS_SERVER: New client! [id: ~p] [worker: ~p]~n", [ClientId, WorkerId]),
-                            spawn(?MODULE, handle_client, [Socket, ClientId, lists:nth(WorkerId, Workers)]),
+                            spawn(?MODULE, handle_unlogged, [Socket, ClientId, lists:nth(WorkerId, Workers)]),
                             dispatcher(ListenerSocket, ClientId+1, Workers);
         % Error
         _               ->  io:format("DFS_SERVER: Error dispatching new connection.~n", []),
@@ -54,20 +54,20 @@ dispatcher(ListenerSocket, ClientId, Workers)->
 
 % [HANDLER]------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-handle_client(Socket, ClientId, W_pid)->
+handle_unlogged(Socket, ClientId, W_pid)->
     case gen_tcp:recv(Socket, 0) of
 
     {ok, "CON\r\n"} ->  gen_tcp:send(Socket, io_lib:format("dfs> OK ID ~p~n", [ClientId])),
-                        handle_client2(Socket, ClientId, W_pid);
+                        handle_logged(Socket, ClientId, W_pid);
 
     {ok, _}         ->  gen_tcp:send(Socket, io_lib:format("dfs> ERROR NOT IDENTIFIED~n", [])),
-                        handle_client(Socket, ClientId, W_pid);
+                        handle_unlogged(Socket, ClientId, W_pid);
 
     {error, closed} ->  io:format("DFS_SERVER: Client [id: ~p] disconnected.~n", [ClientId])
 
   end.
 
-handle_client2(Socket, ClientId, W_pid)->
+handle_logged(Socket, ClientId, W_pid)->
     flush(), % ver - Creo que deberíamos eliminar mensajes que pueden quedar pendientes en after
     gen_tcp:send(Socket, io_lib:format("dfs>", [])),
     case gen_tcp:recv(Socket, 0) of
@@ -77,12 +77,12 @@ handle_client2(Socket, ClientId, W_pid)->
                             L < 4 ->
                                 Answer = io_lib:format("dfs> ERROR BAD COMMAND~n", []),
                                 gen_tcp:send(Socket, Answer),
-                                handle_client2(Socket, ClientId, W_pid);
+                                handle_logged(Socket, ClientId, W_pid);
                             true ->
                                 Req = parseRequest(string:tokens(Buffer, " ")),
                                 case Req of
                                     {parse_error, AnswerF} -> gen_tcp:send(Socket, "dfs> ERROR: " ++ AnswerF ++ " \n"),
-                                                              handle_client2(Socket, ClientId, W_pid);
+                                                              handle_logged(Socket, ClientId, W_pid);
                                     {bye}                  -> W_pid ! {Req, self(), 0},
                                                               io:format("dfs> Client [id: ~p] disconnected.~n", [ClientId]),
                                                               gen_tcp:close(Socket);
@@ -96,7 +96,7 @@ handle_client2(Socket, ClientId, W_pid)->
                                                                                       gen_tcp:send(Socket, Ans)
                                                                after 300 -> gen_tcp:send(Socket, "dfs> ERROR 62 ETIME \n" )
                                                                end,
-                                                               handle_client2(Socket, ClientId, W_pid)
+                                                               handle_logged(Socket, ClientId, W_pid)
                                 end
                         end;
         {error, closed} ->  W_pid ! {{r_bye}, self(), 0},
